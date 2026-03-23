@@ -125,13 +125,16 @@ private:
       if (decl) {
         rule.declarations.push_back(*decl);
       } else {
-        // Recovery: skip to semicolon or close curly
         while (position_ < tokens_.size() && !peek().is(TokenType::Semicolon) &&
                !peek().is(TokenType::CloseCurly)) {
           consume();
         }
-        if (peek().is(TokenType::Semicolon))
+        if (peek().is(TokenType::Semicolon)) {
           consume();
+        } else if (peek().is(TokenType::CloseCurly)) {
+          consume();
+          break;
+        }
       }
     }
 
@@ -154,39 +157,44 @@ private:
       }
 
       std::optional<Combinator> combinator;
+      bool hasCombinator = false;
       if (peek().is(TokenType::Whitespace)) {
-        // Whitespace is a descendant combinator, UNLESS it's followed by >, +,
-        // ~
         consumeWhitespace();
         if (peek().is(TokenType::Delim) && peek().value == ">") {
           combinator = Combinator::Child;
           consume();
+          hasCombinator = true;
         } else if (peek().is(TokenType::Delim) && peek().value == "+") {
           combinator = Combinator::NextSibling;
           consume();
+          hasCombinator = true;
         } else if (peek().is(TokenType::Delim) && peek().value == "~") {
           combinator = Combinator::SubsequentSibling;
           consume();
+          hasCombinator = true;
         } else if (peek().is(TokenType::Comma) ||
                    peek().is(TokenType::OpenCurly)) {
           break;
-        } else {
+        } else if (!peek().is(TokenType::EndOfFile)) {
           combinator = Combinator::Descendant;
+          hasCombinator = true;
         }
       } else if (peek().is(TokenType::Delim) && peek().value == ">") {
         combinator = Combinator::Child;
         consume();
+        hasCombinator = true;
       } else if (peek().is(TokenType::Delim) && peek().value == "+") {
         combinator = Combinator::NextSibling;
         consume();
+        hasCombinator = true;
       } else if (peek().is(TokenType::Delim) && peek().value == "~") {
         combinator = Combinator::SubsequentSibling;
         consume();
+        hasCombinator = true;
       }
 
-      if (!selector.parts.empty()) {
-        selector.combinators.push_back(
-            combinator.value_or(Combinator::Descendant));
+      if (!selector.parts.empty() && hasCombinator) {
+        selector.combinators.push_back(*combinator);
       }
 
       consumeWhitespace();
@@ -358,7 +366,32 @@ private:
         }
       } else if (t.is(TokenType::Function)) {
         decl.value += t.value + "(";
-        // consume function args...
+        while (position_ < tokens_.size() &&
+               !peek().is(TokenType::CloseParen) &&
+               !peek().is(TokenType::EndOfFile)) {
+          Token arg = consume();
+          if (arg.is(TokenType::Whitespace)) {
+            if (!decl.value.empty() && decl.value.back() != ' ') {
+              decl.value += " ";
+            }
+          } else if (arg.is(TokenType::Comma)) {
+            decl.value += ",";
+          } else if (arg.is(TokenType::Number)) {
+            decl.value += std::to_string(arg.numberValue);
+          } else if (arg.is(TokenType::Percentage)) {
+            decl.value += std::to_string(arg.numberValue) + "%";
+          } else if (arg.is(TokenType::Dimension)) {
+            decl.value += std::to_string(arg.numberValue) + arg.unit;
+          } else if (arg.is(TokenType::Ident)) {
+            decl.value += arg.value;
+          } else if (arg.is(TokenType::Delim)) {
+            decl.value += arg.value;
+          }
+        }
+        if (peek().is(TokenType::CloseParen)) {
+          decl.value += ")";
+          consume();
+        }
       } else if (t.is(TokenType::String)) {
         decl.value += "\"" + t.value + "\"";
       } else if (t.is(TokenType::Url)) {
