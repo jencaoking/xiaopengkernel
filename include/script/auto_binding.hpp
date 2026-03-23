@@ -113,8 +113,12 @@ std::tuple<Args...> extract_args(JSContext *ctx, int argc, JSValueConst *argv) {
 template <typename Ret, typename... Args>
 JSValue bind_function(JSContext *ctx, JSValueConst this_val, int argc,
                       JSValueConst *argv, int magic, JSValue *func_data) {
+  static JSClassID s_closure_class_id = 0;
+  if (s_closure_class_id == 0) {
+    JS_NewClassID(&s_closure_class_id);
+  }
   auto *func_ptr = reinterpret_cast<std::function<Ret(Args...)> *>(JS_GetOpaque(
-      *func_data, 1)); // We use class ID 1 for closures here temporarily
+      *func_data, s_closure_class_id));
   if (!func_ptr)
     return JS_EXCEPTION;
 
