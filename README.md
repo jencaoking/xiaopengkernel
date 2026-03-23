@@ -39,12 +39,13 @@ xiaopengkernel/
 
 ### 前置依赖
 
-- CMake 3.20+
+- CMake 3.15+
 - C++20 兼容编译器 (GCC 11+, Clang 14+, MSVC 2019+)
 - SDL2 2.28+
 - curl
 - FreeType
 - HarfBuzz
+- QuickJS
 
 ### 构建步骤
 
