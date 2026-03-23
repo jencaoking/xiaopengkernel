@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Xiaopeng Kernel Showcase (v0.2.0)</title>
+    <style>
+        body {
+            background-color: #f4f4f9;
+            margin: 20px;
+        }
+
+        .container {
+            width: 600px;
+            background-color: #ffffff;
+            border: 2px solid #333333;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #e74c3c;
+            padding-bottom: 10px;
+        }
+
+        .intro {
+            color: #555555;
+            background-color: #e8f6f3;
+            padding: 15px;
+            border-left: 5px solid #1abc9c;
+            margin-bottom: 20px;
+        }
+
+        .feature-box {
+            border: 1px solid #bdc3c7;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .highlight {
+            color: #e74c3c;
+        }
+
+        .image-container {
+            border: 2px dotted #3498db;
+            padding: 10px;
+            text-align: center; /* In our simplified layout, inline alignment relies on margins usually, but we try */
+        }
+
+        .image-container img {
+            border: 3px solid #2ecc71;
+            /* Note: width and height attributes in HTML are used for intrinsic size */
+        }
+
+        .button-area {
+            background-color: #34495e;
+            color: white;
+            padding: 15px;
+        }
+
+        #btn {
+            background-color: #f1c40f;
+            color: black;
+            border: 2px solid #f39c12;
+            padding: 10px;
+            width: 150px;
+            /* text-align center doesn't perfectly work in BFC inline blocks without flex yet, but we'll try */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Xiaopeng Kernel Showcase</h1>
+        
+        <div class="intro">
+            Welcome to the Xiaopeng Kernel <span class="highlight">v0.2.0</span> showcase! 
+            This page tests block layout, inline components, colors, vector fonts (FreeType), and image rendering (stb_image) all at once.
+        </div>
+
+        <div class="feature-box">
+            <p>1. Inline Formatting Context (IFC)</p>
+            <p>This text should wrap smoothly when it hits the 600px boundary. We support basic word wrapping and <span class="highlight">inline styling</span> now.</p>
+        </div>
+
+        <div class="feature-box image-container">
+            <p>2. Image Rendering (with native decoding and layout mapping)</p>
+            <!-- 150x150 placeholder image -->
+            <img src="https://via.placeholder.com/150/0000FF/808080?Text=XP-Kernel" width="150" height="150">
+        </div>
+
+        <div class="feature-box button-area" id="action-zone">
+            <p>3. Interaction & Event System</p>
+            <div id="btn">Click Me!</div>
+            <p id="click-status">Waiting for click...</p>
+        </div>
+    </div>
+
+    <script>
+        console.log("Showcase script executing...");
+        var btn = document.getElementById("btn");
+        var statusText = document.getElementById("click-status");
+        var zone = document.getElementById("action-zone");
+
+        var clickCount = 0;
+
+        if (btn) {
+            console.log("Button found, attaching listener.");
+            btn.addEventListener("click", function() {
+                clickCount++;
+                console.log("Button clicked! Count: " + clickCount);
+                statusText.innerHTML = "Button clicked " + clickCount + " times! <span class='highlight'>(DOM Updated)</span>";
+                
+                // Let's also test dynamic style updates eventually, but for now just text change will trigger layout
+            });
+        }
+    </script>
+</body>
+</html>

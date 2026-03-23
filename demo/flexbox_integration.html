@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flexbox Integration Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        
+        .flex-container {
+            display: flex;
+            width: 600px;
+            height: 400px;
+            background-color: #f0f0f0;
+            border: 2px solid #333;
+            margin-bottom: 20px;
+        }
+        
+        .flex-item {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            margin: 10px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+        
+        .flex-item-1 { flex-grow: 1; background-color: #2196F3; }
+        .flex-item-2 { flex-grow: 2; background-color: #FF9800; }
+        .flex-item-3 { flex-grow: 0; background-color: #9C27B0; }
+        
+        .column-container {
+            display: flex;
+            flex-direction: column;
+            width: 300px;
+            height: 300px;
+            background-color: #e0e0e0;
+            border: 2px solid #333;
+            margin-bottom: 20px;
+        }
+        
+        .column-item {
+            background-color: #E91E63;
+            color: white;
+            padding: 15px;
+            margin: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .wrap-container {
+            display: flex;
+            flex-wrap: wrap;
+            width: 400px;
+            height: 200px;
+            background-color: #d0d0d0;
+            border: 2px solid #333;
+            margin-bottom: 20px;
+        }
+        
+        .wrap-item {
+            background-color: #009688;
+            color: white;
+            padding: 10px;
+            margin: 5px;
+            text-align: center;
+            font-weight: bold;
+            width: 80px;
+            height: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .test-result {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Flexbox Integration Test</h1>
+    
+    <h2>Test 1: Basic Flexbox with Flex Grow</h2>
+    <div class="flex-container">
+        <div class="flex-item flex-item-1">Item 1 (grow: 1)</div>
+        <div class="flex-item flex-item-2">Item 2 (grow: 2)</div>
+        <div class="flex-item flex-item-3">Item 3 (grow: 0)</div>
+    </div>
+    
+    <h2>Test 2: Column Layout</h2>
+    <div class="column-container">
+        <div class="column-item">Column Item 1</div>
+        <div class="column-item">Column Item 2</div>
+        <div class="column-item">Column Item 3</div>
+    </div>
+    
+    <h2>Test 3: Flex Wrap</h2>
+    <div class="wrap-container">
+        <div class="wrap-item">1</div>
+        <div class="wrap-item">2</div>
+        <div class="wrap-item">3</div>
+        <div class="wrap-item">4</div>
+        <div class="wrap-item">5</div>
+        <div class="wrap-item">6</div>
+    </div>
+    
+    <div class="test-result" id="testResult">
+        Test results will appear here...
+    </div>
+    
+    <script>
+        // Test Flexbox functionality
+        function testFlexbox() {
+            const results = [];
+            
+            // Test 1: Check if flex container exists
+            const flexContainer = document.querySelector('.flex-container');
+            if (flexContainer) {
+                results.push('✓ Flex container found');
+                results.push('  Display: ' + window.getComputedStyle(flexContainer).display);
+                results.push('  Width: ' + window.getComputedStyle(flexContainer).width);
+                results.push('  Height: ' + window.getComputedStyle(flexContainer).height);
+            } else {
+                results.push('✗ Flex container not found');
+            }
+            
+            // Test 2: Check flex items
+            const flexItems = document.querySelectorAll('.flex-item');
+            if (flexItems.length > 0) {
+                results.push('✓ Found ' + flexItems.length + ' flex items');
+                flexItems.forEach((item, index) => {
+                    const style = window.getComputedStyle(item);
+                    results.push(`  Item ${index + 1}: width=${style.width}, height=${style.height}`);
+                });
+            } else {
+                results.push('✗ No flex items found');
+            }
+            
+            // Test 3: Check column layout
+            const columnContainer = document.querySelector('.column-container');
+            if (columnContainer) {
+                results.push('✓ Column container found');
+                results.push('  Flex direction: ' + window.getComputedStyle(columnContainer).flexDirection);
+            }
+            
+            // Test 4: Check wrap
+            const wrapContainer = document.querySelector('.wrap-container');
+            if (wrapContainer) {
+                results.push('✓ Wrap container found');
+                results.push('  Flex wrap: ' + window.getComputedStyle(wrapContainer).flexWrap);
+            }
+            
+            // Update test result display
+            const testResult = document.getElementById('testResult');
+            testResult.innerHTML = '<strong>Test Results:</strong><br>' + results.join('<br>');
+            
+            // Log to console
+            console.log('Flexbox Integration Test Results:');
+            results.forEach(result => console.log(result));
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', testFlexbox);
+        
+        // Also run after a short delay to ensure layout is complete
+        setTimeout(testFlexbox, 100);
+    </script>
+</body>
+</html>

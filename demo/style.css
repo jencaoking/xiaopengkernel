@@ -1,0 +1,32 @@
+body {
+    background-color: #f0f0f0;
+    display: block;
+}
+
+.container {
+    display: block;
+    margin: 20px;
+    padding: 20px;
+    border: 2px solid #00ff00; /* Green border to verify external CSS */
+    background-color: #ffffff;
+}
+
+h1 {
+    display: block;
+    color: #333333;
+}
+
+.box {
+    display: block;
+    width: 300px;
+    height: 100px;
+    background-color: #0000ff; /* Blue background */
+    color: #ffffff;
+    margin-top: 10px;
+    padding: 10px;
+}
+
+p {
+    display: block;
+    margin-top: 10px;
+}

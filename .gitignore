@@ -1,0 +1,54 @@
+# Build directories
+build/
+bin/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+CMakeLists.txt.user
+cmake_install.cmake
+Makefile
+Makefile.*
+CTestTestfile.cmake
+compile_commands.json
+*.cmake
+
+# Visual Studio files
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+*.user
+
+# Log files
+*.log
+
+# Test output
+Testing/
+*.exe
+*.a
+*.o
+*.obj
+*.dll
+*.so
+*.dylib
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Third-party (if using submodule or external package management)
+# Uncomment if you want to exclude prebuilt binaries
+# third_party/build/
+# third_party/tmp/
+
+# QuickJS specific (if generated)
+quickjs/examples/*.txt
