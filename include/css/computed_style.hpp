@@ -148,15 +148,31 @@ struct ComputedStyle {
   AlignContent alignContent = AlignContent::Stretch;
   AlignSelf alignSelf = AlignSelf::Auto;
   
-  Length flexGrow = Length::Px(0);
-  Length flexShrink = Length::Px(1);
+  float flexGrow = 0.0f;
+  float flexShrink = 1.0f;
   Length flexBasis = Length::Auto();
 
   // Helper to get property string
   std::string getProperty(const std::string &name) const {
-    // Check specific fields first (simplified mapping)
-    if (name == "display")
-      return "block"; // Todo: map enum to string
+    if (name == "display") {
+      switch (display) {
+        case Display::None: return "none";
+        case Display::Block: return "block";
+        case Display::Inline: return "inline";
+        case Display::InlineBlock: return "inline-block";
+        case Display::Flex: return "flex";
+        case Display::Grid: return "grid";
+      }
+    }
+    if (name == "position") {
+      switch (position) {
+        case Position::Static: return "static";
+        case Position::Relative: return "relative";
+        case Position::Absolute: return "absolute";
+        case Position::Fixed: return "fixed";
+        case Position::Sticky: return "sticky";
+      }
+    }
     auto it = otherProperties.find(name);
     if (it != otherProperties.end())
       return it->second;
