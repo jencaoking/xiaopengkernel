@@ -109,16 +109,43 @@ std::tuple<Args...> extract_args(JSContext *ctx, int argc, JSValueConst *argv) {
       ctx, argc, argv, std::make_index_sequence<sizeof...(Args)>{});
 }
 
+template <typename Ret, typename... Args>
+struct ClosureClass {
+  static JSClassID class_id;
+  static bool registered;
+  static JSClassID get_class_id() {
+    if (class_id == 0) {
+      JS_NewClassID(&class_id);
+    }
+    return class_id;
+  }
+  static void register_class(JSContext *ctx) {
+    if (!registered) {
+      JSClassDef def = {};
+      def.class_name = "CppClosure";
+      def.finalizer = [](JSRuntime *rt, JSValue val) {
+        auto *p = reinterpret_cast<std::function<Ret(Args...)> *>(
+            JS_GetOpaque(val, ClosureClass<Ret, Args...>::get_class_id()));
+        delete p;
+      };
+      JS_NewClass(JS_GetRuntime(ctx), get_class_id(), &def);
+      registered = true;
+    }
+  }
+};
+
+template <typename Ret, typename... Args>
+JSClassID ClosureClass<Ret, Args...>::class_id = 0;
+
+template <typename Ret, typename... Args>
+bool ClosureClass<Ret, Args...>::registered = false;
+
 // Global function binding
 template <typename Ret, typename... Args>
 JSValue bind_function(JSContext *ctx, JSValueConst this_val, int argc,
                       JSValueConst *argv, int magic, JSValue *func_data) {
-  static JSClassID s_closure_class_id = 0;
-  if (s_closure_class_id == 0) {
-    JS_NewClassID(&s_closure_class_id);
-  }
   auto *func_ptr = reinterpret_cast<std::function<Ret(Args...)> *>(JS_GetOpaque(
-      *func_data, s_closure_class_id));
+      *func_data, ClosureClass<Ret, Args...>::get_class_id()));
   if (!func_ptr)
     return JS_EXCEPTION;
 
@@ -143,22 +170,11 @@ JSValue bind_function(JSContext *ctx, JSValueConst this_val, int argc,
 // Utility to create a JS function from a C++ std::function or lambda
 template <typename Ret, typename... Args>
 JSValue create_function(JSContext *ctx, std::function<Ret(Args...)> func) {
-  static JSClassID s_closure_class_id = 0;
-  if (s_closure_class_id == 0) {
-    JS_NewClassID(&s_closure_class_id);
-    JSClassDef def = {};
-    def.class_name = "CppClosure";
-    def.finalizer = [](JSRuntime *rt, JSValue val) {
-      auto *p = reinterpret_cast<std::function<Ret(Args...)> *>(
-          JS_GetOpaque(val, s_closure_class_id));
-      delete p;
-    };
-    JS_NewClass(JS_GetRuntime(ctx), s_closure_class_id, &def);
-  }
+  ClosureClass<Ret, Args...>::register_class(ctx);
 
   auto heap_func = std::make_unique<std::function<Ret(Args...)>>(std::move(func));
 
-  JSValue data_obj = JS_NewObjectClass(ctx, s_closure_class_id);
+  JSValue data_obj = JS_NewObjectClass(ctx, ClosureClass<Ret, Args...>::get_class_id());
   if (JS_IsException(data_obj)) {
     return JS_EXCEPTION;
   }
