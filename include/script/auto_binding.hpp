@@ -139,15 +139,6 @@ JSValue bind_function(JSContext *ctx, JSValueConst this_val, int argc,
 // Utility to create a JS function from a C++ std::function or lambda
 template <typename Ret, typename... Args>
 JSValue create_function(JSContext *ctx, std::function<Ret(Args...)> func) {
-  // We allocate the std::function on heap. Since QuickJS C functions don't have
-  // natural opaque closure pointers that free themselves, we need to wrap it in
-  // a JS object with a custom class ID that frees it upon GC. For simplicity of
-  // this Engine modification, we manage closure via JS_NewCFunctionData. To
-  // avoid memory leak of the std::function, we must assign a finalizer to the
-  // data object.
-
-  // Quick & dirty hack for now: create an opaque JS object just to hold the
-  // pointer
   static JSClassID s_closure_class_id = 0;
   if (s_closure_class_id == 0) {
     JS_NewClassID(&s_closure_class_id);
@@ -161,13 +152,23 @@ JSValue create_function(JSContext *ctx, std::function<Ret(Args...)> func) {
     JS_NewClass(JS_GetRuntime(ctx), s_closure_class_id, &def);
   }
 
-  auto *heap_func = new std::function<Ret(Args...)>(std::move(func));
+  auto heap_func = std::make_unique<std::function<Ret(Args...)>>(std::move(func));
+
   JSValue data_obj = JS_NewObjectClass(ctx, s_closure_class_id);
-  JS_SetOpaque(data_obj, heap_func);
+  if (JS_IsException(data_obj)) {
+    return JS_EXCEPTION;
+  }
+  JS_SetOpaque(data_obj, heap_func.get());
 
   JSValue js_func = JS_NewCFunctionData(ctx, bind_function<Ret, Args...>,
                                         sizeof...(Args), 0, 1, &data_obj);
-  JS_FreeValue(ctx, data_obj); // js_func holds a reference to data_obj now
+  if (JS_IsException(js_func)) {
+    JS_FreeValue(ctx, data_obj);
+    return JS_EXCEPTION;
+  }
+
+  heap_func.release();
+  JS_FreeValue(ctx, data_obj);
 
   return js_func;
 }
