@@ -1,8 +1,68 @@
 # XiaopengKernel (小鹏内核)
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/)
+[![CMake](https://img.shields.io/badge/CMake-3.20+-green)](https://cmake.org/)
+
 这是一个从零开始构建的自研轻量级浏览器/HTML渲染引擎，使用 C++20 编写，旨在探索和实现现代浏览器引擎的核心技术栈，包括 HTML/CSS 解析、CSS Flexbox 布局排版、GPU (OpenGL) 与软件渲染引擎、JavaScript 运行时集成以及基于异步多线程的资源加载与解析。
 
-## 当前项目进度 (已完成阶段)
+## ✨ 特性
+
+- 🌐 **HTML/CSS 解析** - 完整的标记语言解析器
+- 📐 **CSS Flexbox 布局** - 现代弹性盒布局引擎
+- 🎮 **双渲染后端** - OpenGL GPU 加速 + 软件渲染
+- 🔤 **矢量字体支持** - FreeType + HarfBuzz 文本整形
+- ⚡ **多线程解析** - 异步边下载边解析
+- 🧩 **JavaScript 集成** - QuickJS 轻量级 JS 引擎
+
+## 📁 项目结构
+
+```
+xiaopengkernel/
+├── include/            # 头文件目录
+│   ├── css/           # CSS 解析与样式
+│   ├── dom/           # DOM 树构建
+│   ├── engine/        # 浏览器引擎核心
+│   ├── layout/        # 布局算法
+│   ├── loader/        # 资源加载器
+│   ├── renderer/      # 渲染引擎
+│   ├── script/        # JS 脚本绑定
+│   └── window/        # 窗口管理
+├── src/               # 源代码
+├── tests/             # 单元测试
+├── demo/              # 演示页面
+├── docs/              # API 文档
+└── third_party/       # 第三方依赖
+```
+
+## 🔧 构建
+
+### 前置依赖
+
+- CMake 3.20+
+- C++20 兼容编译器 (GCC 11+, Clang 14+, MSVC 2019+)
+- SDL2 2.28+
+- curl
+- FreeType
+- HarfBuzz
+
+### 构建步骤
+
+```bash
+# 创建构建目录
+mkdir build && cd build
+
+# 生成构建文件
+cmake ..
+
+# 编译
+cmake --build .
+
+# 运行测试
+ctest .
+```
+
+## ✅ 当前项目进度
 
 项目已经具备了一个渲染引擎的初步骨架，包含以下核心模块及特性：
 
@@ -70,3 +130,9 @@
 ### 阶段 10: 开发者工具 (DevTools) 支持与高级调试
 - 实现并暴露 Chrome DevTools Protocol (CDP) 接口或内嵌简易的 Inspector UI 审查面板。
 - 支持页面 DOM 树实时审查、CSS 样式覆盖修改生效、JS 控制台交互及网络瀑布流抓包分析。
+
+---
+
+## 📄 许可证
+
+本项目基于 [Apache License 2.0](LICENSE) 开源。
