@@ -126,9 +126,7 @@ struct ClosureClass {
       def.finalizer = [](JSRuntime *rt, JSValue val) {
         auto *p = reinterpret_cast<std::function<Ret(Args...)> *>(
             JS_GetOpaque(val, ClosureClass<Ret, Args...>::get_class_id()));
-        if (p) {
-          delete p;
-        }
+        delete p;
       };
       JS_NewClass(JS_GetRuntime(ctx), get_class_id(), &def);
       registered = true;
