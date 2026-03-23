@@ -193,7 +193,7 @@ private:
         hasCombinator = true;
       }
 
-      if (!selector.parts.empty() && hasCombinator) {
+      if (!selector.parts.empty() && hasCombinator && combinator.has_value()) {
         selector.combinators.push_back(*combinator);
       }
 
