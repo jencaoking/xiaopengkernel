@@ -1,3 +1,4 @@
+#include <cstring>
 #include <iostream>
 #include <window/sdl_window.hpp>
 

@@ -263,9 +263,17 @@ private:
         else if (decl.value == "baseline")
           style.alignItems = AlignItems::Baseline;
       } else if (decl.property == "flex-grow") {
-        style.flexGrow = parseLength(decl.value);
+        float f = 0.0f;
+        try {
+          f = std::stof(decl.value);
+        } catch (...) {}
+        style.flexGrow = f;
       } else if (decl.property == "flex-shrink") {
-        style.flexShrink = parseLength(decl.value);
+        float f = 1.0f;
+        try {
+          f = std::stof(decl.value);
+        } catch (...) {}
+        style.flexShrink = f;
       } else if (decl.property == "flex-basis") {
         style.flexBasis = parseLength(decl.value);
       } else if (decl.property == "border") {

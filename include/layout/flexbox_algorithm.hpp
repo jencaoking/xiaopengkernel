@@ -116,11 +116,11 @@ private:
         item.box = child;
 
         // Get flex properties
-        if (childStyle.flexGrow.unit == css::Length::Unit::Px) {
-          item.flexGrow = childStyle.flexGrow.value;
+        if (childStyle.flexGrow > 0.0f) {
+          item.flexGrow = childStyle.flexGrow;
         }
-        if (childStyle.flexShrink.unit == css::Length::Unit::Px) {
-          item.flexShrink = childStyle.flexShrink.value;
+        if (childStyle.flexShrink != 1.0f) {
+          item.flexShrink = childStyle.flexShrink;
         }
 
         // Handle flex-basis

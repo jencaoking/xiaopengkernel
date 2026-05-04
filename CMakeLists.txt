@@ -5,22 +5,47 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD_EXTENSIONS OFF)
 
-set(CURL_ROOT "${CMAKE_SOURCE_DIR}/third_party/curl")
-set(CURL_INCLUDE_DIR "${CURL_ROOT}/include")
-set(CURL_LIBRARY "${CURL_ROOT}/lib/libcurl.a")
+# Platform detection
+if(WIN32)
+    set(MINGW_BUILD TRUE)
+else()
+    set(MINGW_BUILD FALSE)
+endif()
+
+# CURL Configuration - support both MinGW bundled and Linux system library
+if(MINGW_BUILD)
+    set(CURL_ROOT "${CMAKE_SOURCE_DIR}/third_party/curl")
+    set(CURL_INCLUDE_DIR "${CURL_ROOT}/include")
+    set(CURL_LIBRARY "${CURL_ROOT}/lib/libcurl.a")
+else()
+    find_package(CURL REQUIRED)
+    set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    set(CURL_LIBRARY CURL::libcurl)
+endif()
 
 # SDL2 Configuration
-set(SDL2_ROOT "${CMAKE_SOURCE_DIR}/third_party/SDL2-2.28.5/x86_64-w64-mingw32")
-if(EXISTS "${SDL2_ROOT}")
-    set(SDL2_INCLUDE_DIR "${SDL2_ROOT}/include/SDL2")
-    set(SDL2_LIBRARY "${SDL2_ROOT}/lib/libSDL2.a")
-    set(SDL2_MAIN_LIBRARY "${SDL2_ROOT}/lib/libSDL2main.a")
-    
-    include_directories(${SDL2_INCLUDE_DIR})
-    add_compile_definitions(ENABLE_SDL)
-    message(STATUS "SDL2 found at ${SDL2_ROOT}")
+if(MINGW_BUILD)
+    set(SDL2_ROOT "${CMAKE_SOURCE_DIR}/third_party/SDL2-2.28.5/x86_64-w64-mingw32")
+    if(EXISTS "${SDL2_ROOT}")
+        set(SDL2_INCLUDE_DIR "${SDL2_ROOT}/include/SDL2")
+        set(SDL2_LIBRARY "${SDL2_ROOT}/lib/libSDL2.a")
+        set(SDL2_MAIN_LIBRARY "${SDL2_ROOT}/lib/libSDL2main.a")
+        
+        include_directories(${SDL2_INCLUDE_DIR})
+        add_compile_definitions(ENABLE_SDL)
+        message(STATUS "SDL2 found at ${SDL2_ROOT}")
+    else()
+        message(WARNING "SDL2 not found at ${SDL2_ROOT}. Window support will be disabled.")
+    endif()
 else()
-    message(WARNING "SDL2 not found at ${SDL2_ROOT}. Window support will be disabled.")
+    find_package(SDL2 QUIET)
+    if(SDL2_FOUND)
+        include_directories(${SDL2_INCLUDE_DIRS})
+        add_compile_definitions(ENABLE_SDL)
+        message(STATUS "SDL2 found (system): ${SDL2_INCLUDE_DIRS}")
+    else()
+        message(WARNING "SDL2 not found. Window support will be disabled.")
+    endif()
 endif()
 
 # QuickJS Configuration
@@ -167,6 +192,7 @@ else()
     )
 endif()
 
+if(MINGW_BUILD)
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -189,6 +215,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     shlwapi
     bcrypt
 )
+else()
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    ${CURL_LIBRARY}
+    curl
+    pthread
+)
+endif()
 
 if(EXISTS "${SDL2_ROOT}")
     target_link_libraries(${PROJECT_NAME} PRIVATE 
