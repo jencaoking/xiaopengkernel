@@ -33,17 +33,17 @@ int main() {
   ComputedStyle itemStyle1;
   itemStyle1.width = Length::Px(100);
   itemStyle1.height = Length::Px(50);
-  itemStyle1.flexGrow = Length::Px(1);
+  itemStyle1.flexGrow = 1.0f;
 
   ComputedStyle itemStyle2;
   itemStyle2.width = Length::Px(150);
   itemStyle2.height = Length::Px(50);
-  itemStyle2.flexGrow = Length::Px(2);
+  itemStyle2.flexGrow = 2.0f;
 
   ComputedStyle itemStyle3;
   itemStyle3.width = Length::Px(80);
   itemStyle3.height = Length::Px(50);
-  itemStyle3.flexGrow = Length::Px(0);
+  itemStyle3.flexGrow = 0.0f;
 
   LayoutBoxPtr item1 = std::make_shared<LayoutBox>(
     BoxType::BlockNode, itemStyle1, nullptr);
@@ -103,7 +103,7 @@ int main() {
   ComputedStyle columnItemStyle;
   columnItemStyle.width = Length::Px(100);
   columnItemStyle.height = Length::Px(40);
-  columnItemStyle.flexGrow = Length::Px(1);
+  columnItemStyle.flexGrow = 1.0f;
 
   LayoutBoxPtr columnItem1 = std::make_shared<LayoutBox>(
     BoxType::BlockNode, columnItemStyle, nullptr);
