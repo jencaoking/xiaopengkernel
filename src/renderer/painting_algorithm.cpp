@@ -93,6 +93,21 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
     return;
   }
 
+  // --- 0. Check Overflow and push clip rect if needed ---
+  bool needsClip = false;
+  if (style.overflowX != css::Overflow::Visible ||
+      style.overflowY != css::Overflow::Visible) {
+    // Clip to padding box (content + padding, excluding border)
+    int clipX = borderBoxX + static_cast<int>(dims.border.left);
+    int clipY = borderBoxY + static_cast<int>(dims.border.top);
+    int clipW = static_cast<int>(dims.padding.left + dims.content.width +
+                                 dims.padding.right);
+    int clipH = static_cast<int>(dims.padding.top + dims.content.height +
+                                 dims.padding.bottom);
+    canvas.pushClipRect(clipX, clipY, clipW, clipH);
+    needsClip = true;
+  }
+
   // --- 1. Draw Background (full border box area) ---
   if (style.backgroundColor.a > 0) {
     int bgX = borderBoxX + static_cast<int>(dims.border.left);
@@ -105,6 +120,10 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
   }
 
   // --- 2. Draw Borders ---
+  // Note: borders are drawn even if overflow: hidden, so we need to temporarily pop clip
+  if (needsClip) {
+    canvas.popClipRect();
+  }
 
   // Top Border
   if (dims.border.top > 0 && style.borderTopColor.a > 0) {
@@ -132,6 +151,18 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
     int rx = borderBoxX + borderBoxW - static_cast<int>(dims.border.right);
     canvas.fillRect(rx, borderBoxY, static_cast<int>(dims.border.right),
                     borderBoxH, toColor(style.borderRightColor));
+  }
+
+  // Re-push clip if needed for content
+  if (needsClip) {
+    // Clip to padding box
+    int clipX = borderBoxX + static_cast<int>(dims.border.left);
+    int clipY = borderBoxY + static_cast<int>(dims.border.top);
+    int clipW = static_cast<int>(dims.padding.left + dims.content.width +
+                                 dims.padding.right);
+    int clipH = static_cast<int>(dims.padding.top + dims.content.height +
+                                 dims.padding.bottom);
+    canvas.pushClipRect(clipX, clipY, clipW, clipH);
   }
 
   // --- 3. Paint Block Children ---
@@ -233,6 +264,11 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
         canvas.drawTextVector(fragAbsX, fragAbsY, text, toColor(c));
       }
     }
+  }
+
+  // --- 5. Pop clip rect if we pushed one ---
+  if (needsClip) {
+    canvas.popClipRect();
   }
 }
 

@@ -182,6 +182,63 @@ static const uint8_t font8x8_basic[] = {
 BitmapCanvas::BitmapCanvas(int width, int height)
     : width_(width), height_(height) {
   buffer_.resize(width * height, 0); // Init black transparent
+  // Default clip = full canvas
+  clipStack_.push_back({0, 0, width, height});
+}
+
+bool BitmapCanvas::isInClip(int x, int y) const {
+  if (clipStack_.empty())
+    return true;
+  const auto &clip = clipStack_.back();
+  return x >= clip.x && x < clip.x + clip.width && y >= clip.y &&
+         y < clip.y + clip.height;
+}
+
+void BitmapCanvas::intersectWithClip(int &x, int &y, int &width,
+                                     int &height) const {
+  if (clipStack_.empty())
+    return;
+  const auto &clip = clipStack_.back();
+  int newX = std::max(x, clip.x);
+  int newY = std::max(y, clip.y);
+  int newRight = std::min(x + width, clip.x + clip.width);
+  int newBottom = std::min(y + height, clip.y + clip.height);
+  if (newRight <= newX || newBottom <= newY) {
+    // No intersection
+    width = 0;
+    height = 0;
+    return;
+  }
+  x = newX;
+  y = newY;
+  width = newRight - newX;
+  height = newBottom - newY;
+}
+
+void BitmapCanvas::pushClipRect(int x, int y, int width, int height) {
+  if (clipStack_.empty()) {
+    clipStack_.push_back({x, y, width, height});
+    return;
+  }
+  // Intersect with current clip
+  const auto &current = clipStack_.back();
+  int newX = std::max(x, current.x);
+  int newY = std::max(y, current.y);
+  int newRight = std::min(x + width, current.x + current.width);
+  int newBottom = std::min(y + height, current.y + current.height);
+  if (newRight <= newX || newBottom <= newY) {
+    // Empty clip
+    clipStack_.push_back({0, 0, 0, 0});
+    return;
+  }
+  clipStack_.push_back(
+      {newX, newY, newRight - newX, newBottom - newY});
+}
+
+void BitmapCanvas::popClipRect() {
+  if (clipStack_.size() > 1) {
+    clipStack_.pop_back();
+  }
 }
 
 void BitmapCanvas::resize(int width, int height) {
@@ -199,6 +256,8 @@ void BitmapCanvas::clear(Color color) {
 void BitmapCanvas::setPixel(int x, int y, Color color) {
   if (x < 0 || x >= width_ || y < 0 || y >= height_)
     return;
+  if (!isInClip(x, y))
+    return;
 
   // Simple opaque support for now (no blending in setPixel)
   // [B, G, R, A] for SDL_PIXELFORMAT_ARGB8888
@@ -208,6 +267,8 @@ void BitmapCanvas::setPixel(int x, int y, Color color) {
 
 void BitmapCanvas::blendPixel(int x, int y, Color color) {
   if (x < 0 || x >= width_ || y < 0 || y >= height_)
+    return;
+  if (!isInClip(x, y))
     return;
 
   if (color.a == 0)
@@ -363,8 +424,12 @@ void BitmapCanvas::drawImage(const Image &image, int x, int y, int destW,
 }
 
 void BitmapCanvas::fillRect(int x, int y, int w, int h, Color color) {
-  for (int j = y; j < y + h; ++j) {
-    for (int i = x; i < x + w; ++i) {
+  int cx = x, cy = y, cw = w, ch = h;
+  intersectWithClip(cx, cy, cw, ch);
+  if (cw <= 0 || ch <= 0)
+    return;
+  for (int j = cy; j < cy + ch; ++j) {
+    for (int i = cx; i < cx + cw; ++i) {
       setPixel(i, j, color);
     }
   }

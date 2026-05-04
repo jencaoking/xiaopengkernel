@@ -31,6 +31,9 @@ public:
   int width() const override { return width_; }
   int height() const override { return height_; }
 
+  void pushClipRect(int x, int y, int width, int height) override;
+  void popClipRect() override;
+
   const std::vector<uint32_t> &buffer() const { return buffer_; }
 
   // Save buffer to PPM file
@@ -44,8 +47,15 @@ private:
   // Actually PPM is RGB, so we can store struct Pixel { r,g,b } or uint32_t.
   // Let's use uint32_t 0xAABBGGRR (little endian) -> R at byte 0.
 
+  struct ClipRect {
+    int x, y, width, height;
+  };
+  std::vector<ClipRect> clipStack_;
+
   void setPixel(int x, int y, Color color);
   void blendPixel(int x, int y, Color color); // Simple alpha blending
+  bool isInClip(int x, int y) const;
+  void intersectWithClip(int &x, int &y, int &width, int &height) const;
 
   // Font state
   std::string currentFontFamily_ = "Arial";
