@@ -43,7 +43,7 @@ struct Dimensions {
   EdgeSizes margin;
 };
 
-enum class BoxType { BlockNode, InlineNode, AnonymousBlock, AnonymousInline };
+enum class BoxType { BlockNode, InlineNode, InlineBlockNode, AnonymousBlock, AnonymousInline };
 
 class LayoutBox;
 using LayoutBoxPtr = std::shared_ptr<LayoutBox>;

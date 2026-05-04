@@ -77,6 +77,8 @@ public:
     // 3. Create Box
     if (display == css::Display::Block) {
       layoutNode = std::make_shared<LayoutBox>(BoxType::BlockNode, style, node);
+    } else if (display == css::Display::InlineBlock) {
+      layoutNode = std::make_shared<LayoutBox>(BoxType::InlineBlockNode, style, node);
     } else {
       // For simplicity, treat everything else as inline for now.
       // Text nodes are always inline.

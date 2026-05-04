@@ -99,11 +99,18 @@ enum class AlignSelf {
 
 enum class Position { Static, Relative, Absolute, Fixed, Sticky };
 
+enum class BoxSizing { ContentBox, BorderBox };
+
+enum class TextAlign { Left, Right, Center, Justify };
+
+enum class Overflow { Visible, Hidden, Scroll, Auto };
+
 // Holds the computed style for a DOM element
 struct ComputedStyle {
   // Layout properties
   Display display = Display::Inline; // Default depends on element type usually
   Position position = Position::Static;
+  BoxSizing boxSizing = BoxSizing::ContentBox;
 
   Length width = Length::Auto();
   Length height = Length::Auto();
@@ -154,6 +161,20 @@ struct ComputedStyle {
   float flexGrow = 0.0f;
   float flexShrink = 1.0f;
   Length flexBasis = Length::Auto();
+
+  // Position properties
+  Length top = Length::Auto();
+  Length right = Length::Auto();
+  Length bottom = Length::Auto();
+  Length left = Length::Auto();
+
+  // z-index
+  int zIndex = 0;
+
+  // Text and overflow properties
+  TextAlign textAlign = TextAlign::Left;
+  Overflow overflowX = Overflow::Visible;
+  Overflow overflowY = Overflow::Visible;
 
   std::unordered_map<std::string, CustomPropertyValue> customProperties;
 

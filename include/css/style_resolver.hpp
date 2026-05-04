@@ -342,6 +342,48 @@ private:
         style.borderTopColor = parseColor(decl.value);
       } else if (decl.property == "border-bottom-color") {
         style.borderBottomColor = parseColor(decl.value);
+      } else if (decl.property == "box-sizing") {
+        if (decl.value == "border-box")
+          style.boxSizing = BoxSizing::BorderBox;
+        else
+          style.boxSizing = BoxSizing::ContentBox;
+      } else if (decl.property == "text-align") {
+        if (decl.value == "center")
+          style.textAlign = TextAlign::Center;
+        else if (decl.value == "right")
+          style.textAlign = TextAlign::Right;
+        else if (decl.value == "justify")
+          style.textAlign = TextAlign::Justify;
+        else
+          style.textAlign = TextAlign::Left;
+      } else if (decl.property == "overflow" || decl.property == "overflow-x" || decl.property == "overflow-y") {
+        Overflow overflowVal = Overflow::Visible;
+        if (decl.value == "hidden")
+          overflowVal = Overflow::Hidden;
+        else if (decl.value == "scroll")
+          overflowVal = Overflow::Scroll;
+        else if (decl.value == "auto")
+          overflowVal = Overflow::Auto;
+        
+        if (decl.property == "overflow") {
+          style.overflowX = style.overflowY = overflowVal;
+        } else if (decl.property == "overflow-x") {
+          style.overflowX = overflowVal;
+        } else {
+          style.overflowY = overflowVal;
+        }
+      } else if (decl.property == "top") {
+        style.top = parseLength(decl.value);
+      } else if (decl.property == "right") {
+        style.right = parseLength(decl.value);
+      } else if (decl.property == "bottom") {
+        style.bottom = parseLength(decl.value);
+      } else if (decl.property == "left") {
+        style.left = parseLength(decl.value);
+      } else if (decl.property == "z-index") {
+        try {
+          style.zIndex = std::stoi(decl.value);
+        } catch (...) {}
       }
 
       style.otherProperties[decl.property] = decl.value;

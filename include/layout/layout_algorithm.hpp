@@ -48,12 +48,19 @@ private:
       } else {
         layoutBlock(box);
       }
+    } else if (box->type() == BoxType::InlineBlockNode) {
+      // Inline-block: behave like a block internally but inline in flow
+      // First calculate width/height like a block
+      calculateBlockWidth(box, parentDim);
+      
+      // Layout children like a regular block
+      layoutBlock(box);
+      
+      // Calculate final height
+      calculateBlockHeight(box);
     } else if (box->type() == BoxType::InlineNode ||
                box->type() == BoxType::AnonymousInline) {
       // Inline nodes are typically handled by their parent's IFC.
-      // But if we are here, it might be an inline-block (not supported yet) or
-      // just recursion. For now, simple text/inline is handled by parent
-      // `layoutInline`.
     }
 
     // 4. Calculate Height (for non-flex containers)
@@ -145,6 +152,36 @@ private:
     // Add last line if not empty
     if (!currentLine.fragments().empty()) {
       box->addLineBox(currentLine);
+    }
+
+    // Apply text alignment to each line box
+    applyTextAlignment(box, contentWidth);
+  }
+
+  void applyTextAlignment(LayoutBoxPtr box, float contentWidth) {
+    const auto &style = box->style();
+    if (style.textAlign == css::TextAlign::Left) return;
+
+    for (auto &lineBox : box->lineBoxes()) {
+      // Calculate total used width
+      float usedWidth = 0;
+      for (const auto &fragment : lineBox.fragments()) {
+        usedWidth = std::max(usedWidth, fragment.x + fragment.width);
+      }
+
+      // Calculate offset for alignment
+      float offset = 0;
+      if (style.textAlign == css::TextAlign::Center) {
+        offset = (contentWidth - usedWidth) / 2.0f;
+      } else if (style.textAlign == css::TextAlign::Right) {
+        offset = contentWidth - usedWidth;
+      }
+      // Justify not implemented for simplicity
+
+      // Apply offset to all fragments in line
+      if (offset > 0) {
+        lineBox.shiftFragmentsX(offset);
+      }
     }
   }
 
@@ -238,18 +275,32 @@ private:
   void calculateBlockWidth(LayoutBoxPtr box, const Dimensions &parentDim) {
     const auto &style = box->style();
 
-    // auto width = parent content width
-    float width = style.width.unit == css::Length::Unit::Auto
-                      ? parentDim.content.width
-                      : style.width.value;
+    float width = 0.0f;
 
-    // Percentage support (basic)
-    if (style.width.unit == css::Length::Unit::Percent) {
+    // Parse width
+    if (style.width.unit == css::Length::Unit::Auto) {
+      width = parentDim.content.width;
+    } else if (style.width.unit == css::Length::Unit::Percent) {
       width = parentDim.content.width * (style.width.value / 100.0f);
+    } else {
+      width = style.width.value;
     }
 
-    // Defensive: clamp width to zero to prevent negative dimensions
-    box->dimensions().content.width = std::max(0.0f, width);
+    // Padding and border for box-sizing
+    float paddingLeft = style.paddingLeft.value;
+    float paddingRight = style.paddingRight.value;
+    float borderLeft = style.borderLeftWidth.value;
+    float borderRight = style.borderRightWidth.value;
+
+    if (style.boxSizing == css::BoxSizing::BorderBox) {
+      // border-box: width includes border and padding
+      // content width = width - border - padding
+      float contentWidth = width - borderLeft - paddingLeft - paddingRight - borderRight;
+      box->dimensions().content.width = std::max(0.0f, contentWidth);
+    } else {
+      // content-box: width is content width
+      box->dimensions().content.width = std::max(0.0f, width);
+    }
 
     // Padding/Margin/Border (simplified copy)
     box->dimensions().padding.left = style.paddingLeft.value;
@@ -330,7 +381,18 @@ private:
         box->dimensions().content.height = contentHeight;
       }
     } else {
-      box->dimensions().content.height = style.height.value;
+      float paddingTop = style.paddingTop.value;
+      float paddingBottom = style.paddingBottom.value;
+      float borderTop = style.borderTopWidth.value;
+      float borderBottom = style.borderBottomWidth.value;
+
+      if (style.boxSizing == css::BoxSizing::BorderBox) {
+        // border-box: height includes border and padding
+        float contentHeight = style.height.value - borderTop - paddingTop - paddingBottom - borderBottom;
+        box->dimensions().content.height = std::max(0.0f, contentHeight);
+      } else {
+        box->dimensions().content.height = style.height.value;
+      }
     }
   }
 };
