@@ -410,10 +410,11 @@ list(FILTER TEST_SOURCES EXCLUDE REGEX "test_opengl.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_gpu_acceleration.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_resource_tree.cpp")
 
-# Exclude flexbox and positioning tests from loader_tests to avoid multiple mains
+# Exclude flexbox, positioning, and dom binding tests from loader_tests to avoid multiple mains
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_flexbox.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_flexbox_advanced.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_positioning.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_dom_binding.cpp")
 
 add_executable(loader_tests ${TEST_SOURCES})
 
@@ -651,6 +652,39 @@ set_target_properties(test_positioning PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
 add_test(NAME PositioningTests COMMAND test_positioning)
+
+# Test DOM Binding
+add_executable(test_dom_binding tests/test_dom_binding.cpp)
+target_include_directories(test_dom_binding PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(test_dom_binding PRIVATE "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_dom_binding PRIVATE ENABLE_QUICKJS)
+if(MINGW_BUILD)
+target_link_libraries(test_dom_binding PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_dom_binding PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_dom_binding PRIVATE CURL_STATICLIB)
+target_link_libraries(test_dom_binding PRIVATE xiaopengkernel_core quickjs)
+set_target_properties(test_dom_binding PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME DOMBindingTests COMMAND test_dom_binding)
 
 add_custom_target(run
     COMMAND ${PROJECT_NAME}
