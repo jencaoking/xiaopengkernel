@@ -176,6 +176,12 @@ public:
     return result;
   }
 
+  void removeAllChildren() {
+    childNodes_.clear();
+    firstChild_.reset();
+    lastChild_.reset();
+  }
+
   std::string outerHTML() const { return toHtml(); }
 
   ElementPtr firstElementChild() const {
