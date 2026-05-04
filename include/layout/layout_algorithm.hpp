@@ -27,6 +27,30 @@ public:
 
 private:
   void layoutBox(LayoutBoxPtr box, const Dimensions &parentDim) {
+    // Check if this is an absolutely or fixed positioned element
+    if (box->style().position == css::Position::Absolute ||
+        box->style().position == css::Position::Fixed) {
+      // Handle positioning in layoutBlock, but still need to calculate
+      // proper width/height and layout children
+      calculateBlockWidth(box, parentDim);
+      
+      // Layout children normally (they are in flow of this positioned container)
+      if (box->style().display == css::Display::Flex) {
+        FlexboxAlgorithm flexbox;
+        flexbox.layoutFlexContainer(box, parentDim);
+      } else if (isInlineFormattingContext(box)) {
+        layoutInline(box);
+      } else {
+        layoutBlock(box);
+      }
+      
+      // Calculate height for non-flex containers
+      if (box->style().display != css::Display::Flex) {
+        calculateBlockHeight(box);
+      }
+      return;
+    }
+
     // 1. Calculate Width
     calculateBlockWidth(box, parentDim);
 
@@ -95,12 +119,15 @@ private:
     Dimensions cbDim;
     if (containingBlock) {
       cbDim = containingBlock->dimensions();
+      // For containing block, we use its padding box as reference
     } else {
       cbDim.content = {0, 0, 800, 600};
     }
 
     const auto &style = box->style();
+    auto &dims = box->dimensions();
 
+    // --- Calculate width ---
     float width = 0.0f;
     if (style.width.unit != css::Length::Unit::Auto) {
       if (style.width.unit == css::Length::Unit::Percent) {
@@ -109,28 +136,41 @@ private:
         width = style.width.value;
       }
     } else {
-      width = cbDim.content.width;
+      // If width auto, use shrink-to-fit or available
+      width = cbDim.content.width * 0.8f; // Default fallback
     }
 
+    // Apply box-sizing
     float paddingH = style.paddingLeft.value + style.paddingRight.value;
     float borderH = style.borderLeftWidth.value + style.borderRightWidth.value;
     if (style.boxSizing == css::BoxSizing::BorderBox) {
       width = std::max(0.0f, width - paddingH - borderH);
     }
 
-    box->dimensions().content.width = width;
+    dims.content.width = std::max(0.0f, width);
 
+    // --- Calculate horizontal position ---
     float left = 0.0f;
     if (style.left.unit == css::Length::Unit::Percent) {
       left = cbDim.content.width * (style.left.value / 100.0f);
     } else if (style.left.unit != css::Length::Unit::Auto) {
       left = style.left.value;
+    } else if (style.right.unit != css::Length::Unit::Auto) {
+      // If right specified and left auto, calculate from right
+      float right = style.right.unit == css::Length::Unit::Percent ? 
+                    cbDim.content.width * (style.right.value / 100.0f) : 
+                    style.right.value;
+      left = cbDim.content.width - dims.content.width - paddingH - borderH - right;
     }
 
-    box->dimensions().content.x = cbDim.content.x + left + style.marginLeft.value + 
-                                  style.borderLeftWidth.value + style.paddingLeft.value;
+    // Position content box
+    dims.content.x = cbDim.content.x + left + style.marginLeft.value + 
+                     style.borderLeftWidth.value + style.paddingLeft.value;
 
-    float height = 0.0f;
+    // --- Calculate height (use already calculated height from layoutBox) ---
+    // If height is auto, keep the calculated value from child layout
+    // Otherwise, apply box sizing and constraints
+    float height = dims.content.height;
     if (style.height.unit != css::Length::Unit::Auto) {
       if (style.height.unit == css::Length::Unit::Percent) {
         height = cbDim.content.height * (style.height.value / 100.0f);
@@ -143,32 +183,42 @@ private:
       if (style.boxSizing == css::BoxSizing::BorderBox) {
         height = std::max(0.0f, height - paddingV - borderV);
       }
+      dims.content.height = std::max(0.0f, height);
     }
 
-    box->dimensions().content.height = std::max(0.0f, height);
-
+    // --- Calculate vertical position ---
     float top = 0.0f;
     if (style.top.unit == css::Length::Unit::Percent) {
       top = cbDim.content.height * (style.top.value / 100.0f);
     } else if (style.top.unit != css::Length::Unit::Auto) {
       top = style.top.value;
+    } else if (style.bottom.unit != css::Length::Unit::Auto) {
+      // If bottom specified and top auto, calculate from bottom
+      float bottom = style.bottom.unit == css::Length::Unit::Percent ? 
+                     cbDim.content.height * (style.bottom.value / 100.0f) : 
+                     style.bottom.value;
+      top = cbDim.content.height - dims.content.height - (style.paddingTop.value + style.paddingBottom.value) - 
+            (style.borderTopWidth.value + style.borderBottomWidth.value) - bottom;
     }
 
-    box->dimensions().content.y = cbDim.content.y + top + style.marginTop.value +
-                                   style.borderTopWidth.value + style.paddingTop.value;
+    dims.content.y = cbDim.content.y + top + style.marginTop.value +
+                     style.borderTopWidth.value + style.paddingTop.value;
 
-    box->dimensions().padding = {
-      style.paddingTop.value, style.paddingRight.value,
-      style.paddingBottom.value, style.paddingLeft.value
-    };
-    box->dimensions().border = {
-      style.borderTopWidth.value, style.borderRightWidth.value,
-      style.borderBottomWidth.value, style.borderLeftWidth.value
-    };
-    box->dimensions().margin = {
-      style.marginTop.value, style.marginRight.value,
-      style.marginBottom.value, style.marginLeft.value
-    };
+    // Ensure padding/border/margin are set
+    dims.padding.top = style.paddingTop.value;
+    dims.padding.right = style.paddingRight.value;
+    dims.padding.bottom = style.paddingBottom.value;
+    dims.padding.left = style.paddingLeft.value;
+
+    dims.border.top = style.borderTopWidth.value;
+    dims.border.right = style.borderRightWidth.value;
+    dims.border.bottom = style.borderBottomWidth.value;
+    dims.border.left = style.borderLeftWidth.value;
+
+    dims.margin.top = style.marginTop.value;
+    dims.margin.right = style.marginRight.value;
+    dims.margin.bottom = style.marginBottom.value;
+    dims.margin.left = style.marginLeft.value;
   }
 
   void layoutFixedBox(LayoutBoxPtr box) {
