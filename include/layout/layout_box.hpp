@@ -57,19 +57,24 @@ public:
 
   BoxType type() const { return type_; }
   const css::ComputedStyle &style() const { return style_; }
-  dom::NodePtr node() const { return node_; } // Can be null for anonymous boxes
+  dom::NodePtr node() const { return node_; }
 
   Dimensions &dimensions() { return dimensions_; }
   const Dimensions &dimensions() const { return dimensions_; }
 
   const std::vector<LayoutBoxPtr> &children() const { return children_; }
 
-  void addChild(LayoutBoxPtr child) { children_.push_back(child); }
+  void addChild(LayoutBoxPtr child) { 
+    child->parent_ = weak_from_this();
+    children_.push_back(child); 
+  }
+
+  std::weak_ptr<LayoutBox> parent() const { return parent_; }
 
   // Line box management for Block Containers with Inline Formatting Context
   void addLineBox(LineBox line) { lineBoxes_.push_back(line); }
   const std::vector<LineBox> &lineBoxes() const { return lineBoxes_; }
-  std::vector<LineBox> &lineBoxes() { return lineBoxes_; } // Mutable access
+  std::vector<LineBox> &lineBoxes() { return lineBoxes_; }
 
   // Convenience for layout tree construction
   LayoutBoxPtr getLastChild() const {
@@ -78,16 +83,14 @@ public:
     return children_.back();
   }
 
-  // Virtual method for layout calculation could be added here or kept in
-  // algorithm Let's keep logic separate for now.
-
 private:
   BoxType type_;
   css::ComputedStyle style_;
   dom::NodePtr node_;
   Dimensions dimensions_;
   std::vector<LayoutBoxPtr> children_;
-  std::vector<LineBox> lineBoxes_; // For Block Formatting Context
+  std::vector<LineBox> lineBoxes_;
+  std::weak_ptr<LayoutBox> parent_;
 };
 
 } // namespace layout

@@ -30,11 +30,7 @@ private:
     // 1. Calculate Width
     calculateBlockWidth(box, parentDim);
 
-    // 2. Calculate Position (Margins, Boarder, Padding)
-    // For root, this is 0. For others, it depends on parent type.
-    // In this simplified engine, we assume block flow handles positioning.
-
-    // 3. Determine Layout Mode (BFC, IFC, or Flexbox)
+    // 2. Determine Layout Mode (BFC, IFC, or Flexbox)
     if (box->type() == BoxType::BlockNode ||
         box->type() == BoxType::AnonymousBlock) {
       
@@ -63,10 +59,121 @@ private:
       // Inline nodes are typically handled by their parent's IFC.
     }
 
-    // 4. Calculate Height (for non-flex containers)
+    // 3. Calculate Height (for non-flex containers)
     if (box->style().display != css::Display::Flex) {
       calculateBlockHeight(box);
     }
+  }
+
+  LayoutBoxPtr findContainingBlock(LayoutBoxPtr box) {
+    LayoutBoxPtr current = box;
+    while (current) {
+      auto parent = current->parent().lock();
+      if (!parent) break;
+      
+      auto &style = parent->style();
+      if (style.position != css::Position::Static) {
+        return parent;
+      }
+      
+      current = parent;
+    }
+    return nullptr;
+  }
+
+  void layoutAbsolutePositioned(LayoutBoxPtr parent) {
+    for (auto &child : parent->children()) {
+      if (child->style().position == css::Position::Absolute) {
+        layoutAbsoluteBox(child, parent);
+      } else if (child->style().position == css::Position::Fixed) {
+        layoutFixedBox(child);
+      }
+    }
+  }
+
+  void layoutAbsoluteBox(LayoutBoxPtr box, LayoutBoxPtr containingBlock) {
+    Dimensions cbDim;
+    if (containingBlock) {
+      cbDim = containingBlock->dimensions();
+    } else {
+      cbDim.content = {0, 0, 800, 600};
+    }
+
+    const auto &style = box->style();
+
+    float width = 0.0f;
+    if (style.width.unit != css::Length::Unit::Auto) {
+      if (style.width.unit == css::Length::Unit::Percent) {
+        width = cbDim.content.width * (style.width.value / 100.0f);
+      } else {
+        width = style.width.value;
+      }
+    } else {
+      width = cbDim.content.width;
+    }
+
+    float paddingH = style.paddingLeft.value + style.paddingRight.value;
+    float borderH = style.borderLeftWidth.value + style.borderRightWidth.value;
+    if (style.boxSizing == css::BoxSizing::BorderBox) {
+      width = std::max(0.0f, width - paddingH - borderH);
+    }
+
+    box->dimensions().content.width = width;
+
+    float left = 0.0f;
+    if (style.left.unit == css::Length::Unit::Percent) {
+      left = cbDim.content.width * (style.left.value / 100.0f);
+    } else if (style.left.unit != css::Length::Unit::Auto) {
+      left = style.left.value;
+    }
+
+    box->dimensions().content.x = cbDim.content.x + left + style.marginLeft.value + 
+                                  style.borderLeftWidth.value + style.paddingLeft.value;
+
+    float height = 0.0f;
+    if (style.height.unit != css::Length::Unit::Auto) {
+      if (style.height.unit == css::Length::Unit::Percent) {
+        height = cbDim.content.height * (style.height.value / 100.0f);
+      } else {
+        height = style.height.value;
+      }
+
+      float paddingV = style.paddingTop.value + style.paddingBottom.value;
+      float borderV = style.borderTopWidth.value + style.borderBottomWidth.value;
+      if (style.boxSizing == css::BoxSizing::BorderBox) {
+        height = std::max(0.0f, height - paddingV - borderV);
+      }
+    }
+
+    box->dimensions().content.height = std::max(0.0f, height);
+
+    float top = 0.0f;
+    if (style.top.unit == css::Length::Unit::Percent) {
+      top = cbDim.content.height * (style.top.value / 100.0f);
+    } else if (style.top.unit != css::Length::Unit::Auto) {
+      top = style.top.value;
+    }
+
+    box->dimensions().content.y = cbDim.content.y + top + style.marginTop.value +
+                                   style.borderTopWidth.value + style.paddingTop.value;
+
+    box->dimensions().padding = {
+      style.paddingTop.value, style.paddingRight.value,
+      style.paddingBottom.value, style.paddingLeft.value
+    };
+    box->dimensions().border = {
+      style.borderTopWidth.value, style.borderRightWidth.value,
+      style.borderBottomWidth.value, style.borderLeftWidth.value
+    };
+    box->dimensions().margin = {
+      style.marginTop.value, style.marginRight.value,
+      style.marginBottom.value, style.marginLeft.value
+    };
+  }
+
+  void layoutFixedBox(LayoutBoxPtr box) {
+    LayoutBoxPtr viewportBox = nullptr;
+    layoutAbsoluteBox(box, viewportBox);
   }
 
   bool isInlineFormattingContext(LayoutBoxPtr box) {
@@ -90,13 +197,18 @@ private:
     // Standard Block Layout (Vertical Stacking)
     float currentY = 0;
 
+    // First pass: Layout non-positioned children
     for (auto child : box->children()) {
+      // Skip absolutely and fixed positioned elements for now
+      if (child->style().position == css::Position::Absolute ||
+          child->style().position == css::Position::Fixed) {
+        continue;
+      }
+
       // Recursively layout child
       layoutBox(child, box->dimensions());
 
       // Position child's CONTENT box relative to parent's BORDER box
-      // In CSS, the offset is: parent_padding + child_margin + child_border +
-      // child_padding
       child->dimensions().content.x =
           box->dimensions().padding.left + child->dimensions().margin.left +
           child->dimensions().border.left + child->dimensions().padding.left;
@@ -112,6 +224,16 @@ private:
           child->dimensions().padding.top + child->dimensions().content.height +
           child->dimensions().padding.bottom +
           child->dimensions().border.bottom + child->dimensions().margin.bottom;
+    }
+
+    // Second pass: Layout absolutely positioned children
+    for (auto child : box->children()) {
+      if (child->style().position == css::Position::Absolute) {
+        LayoutBoxPtr containingBlock = findContainingBlock(child);
+        layoutAbsoluteBox(child, containingBlock);
+      } else if (child->style().position == css::Position::Fixed) {
+        layoutFixedBox(child);
+      }
     }
   }
 
