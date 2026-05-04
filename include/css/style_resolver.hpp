@@ -3,7 +3,9 @@
 #include "../dom/dom.hpp"
 #include "computed_style.hpp"
 #include "css_types.hpp"
+#include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -276,6 +278,24 @@ private:
         style.flexShrink = f;
       } else if (decl.property == "flex-basis") {
         style.flexBasis = parseLength(decl.value);
+      } else if (decl.property.substr(0, 2) == "--") {
+        // CSS Custom Properties (CSS Variables)
+        std::string varName = decl.property;
+        std::string varValue = decl.value;
+        if (varValue.find("rgb") != std::string::npos) {
+          style.setCustomProperty(varName, parseFunctionalColor(varValue));
+        } else if (varValue.find("hsl") != std::string::npos) {
+          style.setCustomProperty(varName, parseHSLColor(varValue));
+        } else if (varValue[0] == '#') {
+          style.setCustomProperty(varName, parseColor(varValue));
+        } else if (varValue.find("px") != std::string::npos || 
+                   varValue.find("em") != std::string::npos ||
+                   varValue.find("rem") != std::string::npos ||
+                   varValue.find("%") != std::string::npos) {
+          style.setCustomProperty(varName, parseLength(varValue));
+        } else {
+          style.setCustomProperty(varName, varValue);
+        }
       } else if (decl.property == "border") {
         // Simple shorthand parsing: "width style color"
         // We only care about width and color for now.
@@ -369,8 +389,50 @@ private:
       return Color::White();
     if (val == "transparent")
       return Color::Transparent();
+    if (val == "gray" || val == "grey")
+      return {128, 128, 128, 255};
+    if (val == "cyan")
+      return {0, 255, 255, 255};
+    if (val == "magenta")
+      return {255, 0, 255, 255};
+    if (val == "yellow")
+      return {255, 255, 0, 255};
+    if (val == "orange")
+      return {255, 165, 0, 255};
+    if (val == "purple")
+      return {128, 0, 128, 255};
+    if (val == "pink")
+      return {255, 192, 203, 255};
+    if (val == "brown")
+      return {165, 42, 42, 255};
+    if (val == "navy")
+      return {0, 0, 128, 255};
+    if (val == "teal")
+      return {0, 128, 128, 255};
+    if (val == "olive")
+      return {128, 128, 0, 255};
+    if (val == "silver")
+      return {192, 192, 192, 255};
+    if (val == "lime")
+      return {0, 255, 0, 255};
+    if (val == "aqua")
+      return {0, 255, 255, 255};
+    if (val == "maroon")
+      return {128, 0, 0, 255};
+    if (val == "fuchsia")
+      return {255, 0, 255, 255};
 
-    // 2. Hex Colors
+    // 2. rgb() and rgba() functional notation
+    if (val.find("rgb") != std::string::npos) {
+      return parseFunctionalColor(val);
+    }
+
+    // 3. hsl() and hsla() functional notation
+    if (val.find("hsl") != std::string::npos) {
+      return parseHSLColor(val);
+    }
+
+    // 4. Hex Colors
     if (val[0] == '#') {
       std::string hex = val.substr(1);
       if (hex.length() == 3) {
@@ -397,6 +459,206 @@ private:
 
     // Default fallback
     return Color::Black();
+  }
+
+  Color parseFunctionalColor(const std::string &val) {
+    size_t start = val.find('(');
+    size_t end = val.find(')');
+    if (start == std::string::npos || end == std::string::npos)
+      return Color::Black();
+
+    std::string content = val.substr(start + 1, end - start - 1);
+    std::stringstream ss(content);
+    std::string token;
+    std::vector<float> values;
+
+    while (std::getline(ss, token, ',')) {
+      token.erase(remove_if(token.begin(), token.end(), isspace), token.end());
+      float num = 0.0f;
+      std::string percent;
+
+      size_t percentPos = token.find('%');
+      if (percentPos != std::string::npos) {
+        percent = "%";
+        token = token.substr(0, percentPos);
+      }
+
+      try {
+        num = std::stof(token);
+      } catch (...) {
+        continue;
+      }
+
+      if (!percent.empty()) {
+        num = num * 255.0f / 100.0f;
+      }
+      values.push_back(num);
+    }
+
+    if (values.size() >= 3) {
+      uint8_t r = static_cast<uint8_t>(std::min(255.0f, std::max(0.0f, values[0])));
+      uint8_t g = static_cast<uint8_t>(std::min(255.0f, std::max(0.0f, values[1])));
+      uint8_t b = static_cast<uint8_t>(std::min(255.0f, std::max(0.0f, values[2])));
+      uint8_t a = 255;
+      if (values.size() >= 4) {
+        if (values[3] <= 1.0f) {
+          a = static_cast<uint8_t>(values[3] * 255.0f);
+        } else {
+          a = static_cast<uint8_t>(std::min(255.0f, std::max(0.0f, values[3])));
+        }
+      }
+      return {r, g, b, a};
+    }
+
+    return Color::Black();
+  }
+
+  Color parseHSLColor(const std::string &val) {
+    size_t start = val.find('(');
+    size_t end = val.find(')');
+    if (start == std::string::npos || end == std::string::npos)
+      return Color::Black();
+
+    std::string content = val.substr(start + 1, end - start - 1);
+    std::stringstream ss(content);
+    std::string token;
+    std::vector<float> values;
+
+    while (std::getline(ss, token, ',')) {
+      token.erase(remove_if(token.begin(), token.end(), isspace), token.end());
+      float num = 0.0f;
+      std::string percent;
+
+      size_t percentPos = token.find('%');
+      if (percentPos != std::string::npos) {
+        percent = "%";
+        token = token.substr(0, percentPos);
+      }
+
+      try {
+        num = std::stof(token);
+      } catch (...) {
+        continue;
+      }
+
+      if (!percent.empty() && values.size() == 1) {
+        num = num * 255.0f / 100.0f;
+      }
+      values.push_back(num);
+    }
+
+    if (values.size() >= 3) {
+      float h = values[0];
+      float s = values.size() > 1 ? values[1] / 100.0f : 0.0f;
+      float l = values.size() > 2 ? values[2] / 100.0f : 0.0f;
+
+      if (h > 1) h = h / 360.0f;
+
+      float r, g, b;
+      if (s == 0) {
+        r = g = b = l;
+      } else {
+        auto hue2rgb = [](float p, float q, float t) {
+          if (t < 0) t += 1;
+          if (t > 1) t -= 1;
+          if (t < 1.0f/6.0f) return p + (q - p) * 6.0f * t;
+          if (t < 1.0f/2.0f) return q;
+          if (t < 2.0f/3.0f) return p + (q - p) * (2.0f/3.0f - t) * 6.0f;
+          return p;
+        };
+        float q = l < 0.5f ? l * (1 + s) : l + s - l * s;
+        float p = 2.0f * l - q;
+        r = hue2rgb(p, q, h + 1.0f/3.0f);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1.0f/3.0f);
+      }
+
+      uint8_t alpha = 255;
+      if (values.size() >= 4) {
+        if (values[3] <= 1.0f) {
+          alpha = static_cast<uint8_t>(values[3] * 255.0f);
+        } else {
+          alpha = static_cast<uint8_t>(std::min(255.0f, std::max(0.0f, values[3])));
+        }
+      }
+
+      return {
+        static_cast<uint8_t>(r * 255),
+        static_cast<uint8_t>(g * 255),
+        static_cast<uint8_t>(b * 255),
+        alpha
+      };
+    }
+
+    return Color::Black();
+  }
+
+  std::string resolveCSSVariable(const std::string& value, const ComputedStyle& style) {
+    (void)style; // Suppress unused warning - style used in property lookup
+    // Check if value contains var()
+    size_t varPos = value.find("var(");
+    if (varPos == std::string::npos) {
+      return value;
+    }
+
+    std::string result = value;
+    size_t start = 0;
+
+    while ((start = result.find("var(", start)) != std::string::npos) {
+      size_t endParen = result.find(')', start);
+      if (endParen == std::string::npos) {
+        break;
+      }
+
+      std::string varContent = result.substr(start + 4, endParen - start - 4);
+
+      // Remove whitespace
+      varContent.erase(remove_if(varContent.begin(), varContent.end(), isspace), varContent.end());
+
+      // Get variable name
+      size_t commaPos = varContent.find(',');
+      std::string varName = (commaPos != std::string::npos) 
+                           ? varContent.substr(0, commaPos) 
+                           : varContent;
+      std::string fallback = (commaPos != std::string::npos) 
+                              ? varContent.substr(commaPos + 1) 
+                              : "";
+
+      // Try to get custom property value from style
+      const CustomPropertyValue* propValue = style.getCustomProperty(varName);
+      std::string replacement;
+
+      if (propValue) {
+        if (std::holds_alternative<std::string>(*propValue)) {
+          replacement = std::get<std::string>(*propValue);
+        } else if (std::holds_alternative<Length>(*propValue)) {
+          const Length& len = std::get<Length>(*propValue);
+          if (len.unit == Length::Unit::Px) {
+            replacement = std::to_string(len.value) + "px";
+          } else if (len.unit == Length::Unit::Percent) {
+            replacement = std::to_string(len.value) + "%";
+          } else if (len.unit == Length::Unit::Em) {
+            replacement = std::to_string(len.value) + "em";
+          }
+        } else if (std::holds_alternative<Color>(*propValue)) {
+          const Color& col = std::get<Color>(*propValue);
+          char hexBuffer[8];
+          snprintf(hexBuffer, sizeof(hexBuffer), "#%02x%02x%02x", col.r, col.g, col.b);
+          replacement = hexBuffer;
+        }
+      }
+
+      // Use fallback if no value found
+      if (replacement.empty()) {
+        replacement = fallback;
+      }
+
+      // Replace the var() with the resolved value
+      result.replace(start, endParen - start + 1, replacement);
+      start += replacement.length();
+    }
+
+    return result;
   }
 
   uint8_t hexCharToInt(char c) {

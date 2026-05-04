@@ -30,6 +30,7 @@ public:
   /// Measure a word's pixel width and height at the given font size.
   TextMeasurement measureWord(const std::string &word,
                               const std::string &fontFamily, int fontSize) {
+    (void)fontFamily; // Suppress unused warning - fontFamily used in FreeType path
     TextMeasurement m;
 #ifdef ENABLE_FREETYPE
     auto &fm = FontManager::instance();

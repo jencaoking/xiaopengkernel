@@ -35,6 +35,9 @@ struct Length {
   static Length Auto() { return {0, Unit::Auto}; }
 };
 
+// Custom property value - can be string, length, or color (defined after Length)
+using CustomPropertyValue = std::variant<std::string, Length, Color>;
+
 enum class Display {
   None,
   Block,
@@ -151,6 +154,22 @@ struct ComputedStyle {
   float flexGrow = 0.0f;
   float flexShrink = 1.0f;
   Length flexBasis = Length::Auto();
+
+  std::unordered_map<std::string, CustomPropertyValue> customProperties;
+
+  // Helper to get custom property value
+  const CustomPropertyValue* getCustomProperty(const std::string& name) const {
+    auto it = customProperties.find(name);
+    if (it != customProperties.end()) {
+      return &(it->second);
+    }
+    return nullptr;
+  }
+
+  // Helper to set custom property value
+  void setCustomProperty(const std::string& name, const CustomPropertyValue& value) {
+    customProperties[name] = value;
+  }
 
   // Helper to get property string
   std::string getProperty(const std::string &name) const {

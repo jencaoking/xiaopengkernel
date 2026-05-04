@@ -145,6 +145,7 @@ void SdlWindow::drawOpenGLTexture(GLuint texture) {
   if (!m_isOpen)
     return;
 
+  (void)texture; // Used by glBindTexture below
   // Bind the texture
   glBindTexture(GL_TEXTURE_2D, texture);
 

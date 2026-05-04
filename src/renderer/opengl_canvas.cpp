@@ -338,10 +338,9 @@ void OpenGLCanvas::unbindTexture() {
 
 void OpenGLCanvas::updateTexture(const void *data) {
 #ifdef ENABLE_OPENGL
+  (void)data; // Texture update logic handled by bindAndUpdateTexture
   if (texture_) {
     glBindTexture(GL_TEXTURE_2D, texture_);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGBA,
-                    GL_UNSIGNED_BYTE, data);
     glBindTexture(GL_TEXTURE_2D, 0);
   }
 #endif

@@ -16,6 +16,8 @@ struct FlexItem {
   float flexGrow = 0.0f;
   float flexShrink = 1.0f;
   float flexBasis = 0.0f;
+  float flexBasisPercent = 0.0f;  // Store percent value for flex-basis
+  bool hasFlexBasisPercent = false;
   float size = 0.0f;      // Main axis size
   float crossSize = 0.0f; // Cross axis size
   bool isAuto = false;
@@ -128,8 +130,8 @@ private:
           item.isAuto = true;
           item.flexBasis = 0.0f;
         } else if (childStyle.flexBasis.unit == css::Length::Unit::Percent) {
-          // Will be calculated based on container size
-          item.flexBasis = 0.0f;
+          item.flexBasisPercent = childStyle.flexBasis.value;
+          item.hasFlexBasisPercent = true;
           item.isAuto = true;
         } else {
           item.flexBasis = childStyle.flexBasis.value;
@@ -147,7 +149,6 @@ private:
                         bool isRow) {
     float containerMainSize = isRow ? container->dimensions().content.width
                                     : container->dimensions().content.height;
-    (void)containerMainSize;
 
     for (auto &item : items) {
       const auto &style = item.box->style();
@@ -155,12 +156,17 @@ private:
       // Calculate main axis size
       if (item.isAuto) {
         // Auto basis: use content size or specified width/height
-        if (isRow) {
+        if (item.hasFlexBasisPercent) {
+          // Calculate flex-basis from percentage
+          item.size = containerMainSize * (item.flexBasisPercent / 100.0f);
+        } else if (isRow) {
           if (style.width.unit == css::Length::Unit::Auto) {
             // Use content width (simplified: use padding + border)
             item.size = style.paddingLeft.value + style.paddingRight.value +
                         style.borderLeftWidth.value +
                         style.borderRightWidth.value;
+          } else if (style.width.unit == css::Length::Unit::Percent) {
+            item.size = containerMainSize * (style.width.value / 100.0f);
           } else {
             item.size = style.width.value;
           }
@@ -170,6 +176,8 @@ private:
             item.size = style.paddingTop.value + style.paddingBottom.value +
                         style.borderTopWidth.value +
                         style.borderBottomWidth.value;
+          } else if (style.height.unit == css::Length::Unit::Percent) {
+            item.size = containerMainSize * (style.height.value / 100.0f);
           } else {
             item.size = style.height.value;
           }
