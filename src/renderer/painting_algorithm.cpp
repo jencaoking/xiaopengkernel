@@ -2,6 +2,7 @@
 #include "dom/dom.hpp"
 #include "loader/loader.hpp"
 #include "renderer/image.hpp"
+#include <algorithm>
 #include <iostream>
 #include <memory>
 
@@ -15,8 +16,48 @@ void PaintingAlgorithm::paint(layout::LayoutBoxPtr root, Canvas &canvas) {
   // Paint background
   canvas.clear(Color::White());
 
-  // Recursive paint — root's border box starts at (0,0)
-  paintBox(root, canvas, 0, 0);
+  // Collect all paint items and sort by z-index
+  std::vector<PaintItem> paintItems;
+  collectPaintItems(root, 0, 0, paintItems);
+
+  // Sort items by z-index (ascending, so lower z-index draws first, higher later)
+  std::sort(paintItems.begin(), paintItems.end(),
+            [](const PaintItem &a, const PaintItem &b) {
+              int zA = a.box->style().zIndex;
+              int zB = b.box->style().zIndex;
+
+              // Auto z-index is treated as 0
+              if (zA == 0 && zB == 0) {
+                // Stable sort: keep original tree order
+                return false;
+              }
+              return zA < zB;
+            });
+
+  // Paint in sorted order
+  for (const auto &item : paintItems) {
+    paintBox(item.box, canvas, item.parentBorderBoxX, item.parentBorderBoxY);
+  }
+}
+
+void PaintingAlgorithm::collectPaintItems(layout::LayoutBoxPtr box, int parentX,
+                                           int parentY, std::vector<PaintItem> &items) {
+  // Add this box to paint list
+  items.push_back({box, parentX, parentY});
+
+  // Calculate this box's border box position for children
+  const auto &dims = box->dimensions();
+  int contentAbsX = parentX + static_cast<int>(dims.content.x);
+  int contentAbsY = parentY + static_cast<int>(dims.content.y);
+  int borderBoxX = contentAbsX - static_cast<int>(dims.padding.left) -
+                   static_cast<int>(dims.border.left);
+  int borderBoxY = contentAbsY - static_cast<int>(dims.padding.top) -
+                   static_cast<int>(dims.border.top);
+
+  // Recursively collect children
+  for (const auto &child : box->children()) {
+    collectPaintItems(child, borderBoxX, borderBoxY, items);
+  }
 }
 
 void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
@@ -94,10 +135,8 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
   }
 
   // --- 3. Paint Block Children ---
-  // Pass THIS box's borderBox origin as the parent origin for children.
-  for (const auto &child : box->children()) {
-    paintBox(child, canvas, borderBoxX, borderBoxY);
-  }
+  // NOTE: Children are now collected and sorted globally,
+  // so we don't recursively paint children here.
 
   // --- 3.5. Paint Replaced Elements (Images) ---
   if (box->node() && box->node()->nodeType() == dom::NodeType::Element) {

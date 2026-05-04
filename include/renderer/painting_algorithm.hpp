@@ -18,6 +18,14 @@ public:
   void clearImageCache() { imageCache_.clear(); }
 
 private:
+  struct PaintItem {
+    layout::LayoutBoxPtr box;
+    int parentBorderBoxX;
+    int parentBorderBoxY;
+  };
+
+  void collectPaintItems(layout::LayoutBoxPtr box, int parentX, int parentY,
+                         std::vector<PaintItem> &items);
   void paintBox(layout::LayoutBoxPtr box, Canvas &canvas, int globalX,
                 int globalY);
 
