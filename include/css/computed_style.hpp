@@ -254,6 +254,52 @@ struct ComputedStyle {
   Overflow overflowX = Overflow::Visible;
   Overflow overflowY = Overflow::Visible;
 
+  // ==================== CSS Animation & Transition ====================
+  // Animation properties
+  std::string animationName;
+  float animationDuration = 0.0f;
+  float animationDelay = 0.0f;
+  int animationIterationCount = 1;
+  std::string animationDirection = "normal"; // normal, reverse, alternate, alternate-reverse
+  std::string animationTimingFunction = "ease";
+  std::string animationFillMode = "none"; // none, forwards, backwards, both
+  std::string animationPlayState = "running"; // running, paused
+
+  // Transition properties
+  std::vector<std::string> transitionProperty = {"all"};
+  std::vector<float> transitionDuration = {0.0f};
+  std::vector<float> transitionDelay = {0.0f};
+  std::vector<std::string> transitionTimingFunction = {"ease"};
+
+  // Transform properties
+  std::string transformOrigin = "50% 50%";
+  std::string transformStyle = "flat";
+  std::string backfaceVisibility = "visible";
+
+  // Border radius properties
+  Length borderTopLeftRadius = Length::Px(0);
+  Length borderTopRightRadius = Length::Px(0);
+  Length borderBottomLeftRadius = Length::Px(0);
+  Length borderBottomRightRadius = Length::Px(0);
+
+  // Box shadow
+  std::string boxShadow;
+
+  // Outline properties
+  Length outlineWidth = Length::Px(0);
+  std::string outlineStyle = "none";
+  Color outlineColor = Color::Black();
+  Length outlineOffset = Length::Px(0);
+
+  // Cursor property
+  std::string cursor = "auto";
+
+  // User select
+  std::string userSelect = "auto";
+
+  // Pointer events
+  std::string pointerEvents = "auto";
+
   std::unordered_map<std::string, CustomPropertyValue> customProperties;
 
   // Helper to get custom property value

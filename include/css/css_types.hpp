@@ -183,6 +183,15 @@ struct Rule {
 
 struct StyleSheet {
   std::vector<Rule> rules;
+  // We'll define this in css_parser.hpp or css_animation.hpp later
+};
+
+// Forward declaration
+struct KeyframesRule;
+
+struct StyleSheetWithAnimations {
+  std::vector<Rule> rules;
+  std::vector<KeyframesRule> keyframesRules;
 };
 
 } // namespace css

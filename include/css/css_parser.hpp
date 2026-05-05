@@ -2,13 +2,20 @@
 
 #include "css_tokenizer.hpp"
 #include "css_types.hpp"
+#include "css_animation.hpp"
 #include <optional>
 #include <string>
 #include <vector>
-
+#include <map>
 
 namespace xiaopeng {
 namespace css {
+
+// Extended StyleSheet that includes animations
+struct ExtendedStyleSheet {
+  std::vector<Rule> rules;
+  std::vector<KeyframesRule> keyframesRules;
+};
 
 class CssParser {
 public:
@@ -19,16 +26,34 @@ public:
 
   StyleSheet parse() {
     StyleSheet sheet;
+    sheet.rules = parseExtended().rules;
+    return sheet;
+  }
+
+  ExtendedStyleSheet parseExtended() {
+    ExtendedStyleSheet sheet;
     while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile)) {
       consumeWhitespace();
       if (peek().is(TokenType::EndOfFile))
         break;
 
-      if (peek().is(TokenType::AtKeyword) || peek().is(TokenType::CDO) ||
-          peek().is(TokenType::CDC)) {
-        // Skip At-rules and CDO/CDC for MVP
-        consumeUntil(TokenType::CloseCurly); // Very naive skipping
-        consumeIgnoreEOF();                  // Consume the }
+      if (peek().is(TokenType::AtKeyword)) {
+        std::string atKeyword = peek().value;
+        consume();
+
+        if (atKeyword == "keyframes" || atKeyword == "-webkit-keyframes") {
+          auto keyframesRule = parseKeyframesRule();
+          if (keyframesRule) {
+            sheet.keyframesRules.push_back(*keyframesRule);
+          }
+          continue;
+        } else {
+          consumeUntil(TokenType::CloseCurly);
+          if (peek().is(TokenType::CloseCurly)) consume();
+          continue;
+        }
+      } else if (peek().is(TokenType::CDO) || peek().is(TokenType::CDC)) {
+        consume();
         continue;
       }
 
@@ -36,12 +61,97 @@ public:
       if (rule) {
         sheet.rules.push_back(*rule);
       } else {
-        // Error recovery: skip until }
         consumeUntil(TokenType::CloseCurly);
         consumeIgnoreEOF();
       }
     }
     return sheet;
+  }
+
+private:
+  // Parse a @keyframes rule using the structure from css_animation.hpp
+  std::optional<KeyframesRule> parseKeyframesRule() {
+    KeyframesRule kfRule;
+
+    consumeWhitespace();
+    if (!peek().is(TokenType::Ident)) {
+      return std::nullopt;
+    }
+    kfRule.name = consume().value;
+
+    consumeWhitespace();
+    if (!peek().is(TokenType::OpenCurly)) {
+      return std::nullopt;
+    }
+    consume();
+
+    while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+           !peek().is(TokenType::CloseCurly)) {
+      consumeWhitespace();
+      if (peek().is(TokenType::CloseCurly)) break;
+
+      KeyframeBlock block;
+
+      bool hasSelector = false;
+      while (position_ < tokens_.size() && !peek().is(TokenType::OpenCurly)) {
+        consumeWhitespace();
+        if (peek().is(TokenType::Percentage)) {
+          double p = peek().numberValue;
+          block.selectors.push_back(KeyframeSelector::fromPercent(p));
+          consume();
+          hasSelector = true;
+        } else if (peek().is(TokenType::Ident) && peek().value == "from") {
+          block.selectors.push_back(KeyframeSelector::fromPercent(0));
+          consume();
+          hasSelector = true;
+        } else if (peek().is(TokenType::Ident) && peek().value == "to") {
+          block.selectors.push_back(KeyframeSelector::fromPercent(100));
+          consume();
+          hasSelector = true;
+        } else if (peek().is(TokenType::Comma)) {
+          consume();
+        } else {
+          break;
+        }
+      }
+
+      if (!hasSelector) {
+        consumeUntil(TokenType::CloseCurly);
+        if (peek().is(TokenType::CloseCurly)) consume();
+        continue;
+      }
+
+      consumeWhitespace();
+      if (!peek().is(TokenType::OpenCurly)) {
+        continue;
+      }
+      consume();
+
+      while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+             !peek().is(TokenType::CloseCurly)) {
+        consumeWhitespace();
+        if (peek().is(TokenType::CloseCurly)) break;
+
+        auto decl = parseDeclaration();
+        if (decl) {
+          block.properties[decl->property] = decl->value;
+        } else {
+          while (position_ < tokens_.size() && !peek().is(TokenType::Semicolon) &&
+                 !peek().is(TokenType::CloseCurly)) {
+            consume();
+          }
+          if (peek().is(TokenType::Semicolon)) consume();
+        }
+      }
+
+      if (peek().is(TokenType::CloseCurly)) consume();
+
+      kfRule.blocks.push_back(std::move(block));
+    }
+
+    if (peek().is(TokenType::CloseCurly)) consume();
+
+    return kfRule;
   }
 
 private:
