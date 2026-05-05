@@ -105,6 +105,8 @@ enum class TextAlign { Left, Right, Center, Justify };
 
 enum class Overflow { Visible, Hidden, Scroll, Auto };
 
+enum class Isolation { Auto, Isolate };
+
 // Grid specific properties
 enum class GridAutoFlow {
   Row, Column, RowDense, ColumnDense
@@ -238,6 +240,14 @@ struct ComputedStyle {
 
   // z-index
   int zIndex = 0;
+
+  // Stacking context properties
+  float opacity = 1.0f;
+  std::string transform;
+  std::string filter;
+  std::string perspective;
+  std::string willChange;
+  Isolation isolation = Isolation::Auto;
 
   // Text and overflow properties
   TextAlign textAlign = TextAlign::Left;

@@ -169,9 +169,164 @@ private:
         return val.has_value() && val.value() == simple.attributeValue;
         // Operator support would be here
       }
+    case SelectorType::PseudoClass:
+      return matchPseudoClass(element, simple.value);
+    case SelectorType::PseudoElement:
+      return matchPseudoElement(element, simple.value);
     default:
       return false;
     }
+  }
+
+  bool matchPseudoClass(dom::ElementPtr element, const std::string &name) {
+    if (name == "hover") {
+      return element->isHovered();
+    } else if (name == "active") {
+      return element->isActive();
+    } else if (name == "focus") {
+      return element->isFocused();
+    } else if (name == "first-child") {
+      return element->isFirstChild();
+    } else if (name == "last-child") {
+      return element->isLastChild();
+    } else if (name == "only-child") {
+      return element->isOnlyChild();
+    } else if (name == "empty") {
+      return element->isEmpty();
+    } else if (name == "root") {
+      return element->isDocumentRoot();
+    } else if (name.substr(0, 9) == "nth-child") {
+      // Parse :nth-child(an+b)
+      std::string args = name.substr(9);
+      if (args.size() >= 2 && args[0] == '(' && args.back() == ')') {
+        std::string formula = args.substr(1, args.size() - 2);
+        return matchNthChild(element, formula);
+      }
+    } else if (name.substr(0, 12) == "nth-last-child") {
+      std::string args = name.substr(12);
+      if (args.size() >= 2 && args[0] == '(' && args.back() == ')') {
+        std::string formula = args.substr(1, args.size() - 2);
+        return matchNthLastChild(element, formula);
+      }
+    } else if (name.substr(0, 11) == "nth-of-type") {
+      std::string args = name.substr(11);
+      if (args.size() >= 2 && args[0] == '(' && args.back() == ')') {
+        std::string formula = args.substr(1, args.size() - 2);
+        return matchNthOfType(element, formula);
+      }
+    } else if (name.substr(0, 3) == "not") {
+      // :not(selector) - simplified support
+      return !matchNotPseudoClass(element, name);
+    } else if (name == "checked") {
+      return element->isChecked();
+    } else if (name == "disabled") {
+      return element->isDisabled();
+    } else if (name == "enabled") {
+      return !element->isDisabled();
+    } else if (name == "required") {
+      return element->hasAttribute("required");
+    } else if (name == "optional") {
+      return !element->hasAttribute("required");
+    } else if (name == "link") {
+      return element->isLink();
+    } else if (name == "visited") {
+      return element->isVisited();
+    }
+    return false;
+  }
+
+  bool matchPseudoElement(dom::ElementPtr element, const std::string &name) {
+    // Pseudo-elements like ::before, ::after, ::first-line, ::first-letter
+    // These are typically handled during rendering
+    // For matching purposes, we consider them to match
+    return true;
+  }
+
+  bool matchNthChild(dom::ElementPtr element, const std::string &formula) {
+    int siblingIndex = element->getElementSiblingIndex();
+    return evaluateNthFormula(siblingIndex, formula);
+  }
+
+  bool matchNthLastChild(dom::ElementPtr element, const std::string &formula) {
+    int siblingIndex = element->getElementSiblingIndexFromEnd();
+    return evaluateNthFormula(siblingIndex, formula);
+  }
+
+  bool matchNthOfType(dom::ElementPtr element, const std::string &formula) {
+    int siblingIndex = element->getElementSiblingIndexOfType();
+    return evaluateNthFormula(siblingIndex, formula);
+  }
+
+  bool evaluateNthFormula(int index, const std::string &formula) {
+    // Simplified nth-child formula evaluation
+    // Supported: "odd", "even", "n", "an+b" where a and b are integers
+    if (formula == "odd") {
+      return index % 2 == 1;
+    } else if (formula == "even") {
+      return index % 2 == 0;
+    } else if (formula == "n") {
+      return true;
+    } else if (formula.find("n") != std::string::npos) {
+      // Parse "an+b" format
+      std::string aStr, bStr;
+      size_t nPos = formula.find('n');
+      
+      if (nPos == 0) {
+        aStr = "1";
+      } else if (nPos == 1 && formula[0] == '-') {
+        aStr = "-1";
+      } else {
+        aStr = formula.substr(0, nPos);
+      }
+      
+      bStr = formula.substr(nPos + 1);
+      if (bStr.empty()) {
+        bStr = "0";
+      }
+      
+      int a = 0, b = 0;
+      try {
+        a = std::stoi(aStr);
+        b = std::stoi(bStr);
+      } catch (...) {
+        return false;
+      }
+      
+      if (a == 0) {
+        return index == b;
+      }
+      
+      // nth-child is 1-indexed
+      int adjustedIndex = index - b;
+      return adjustedIndex >= 0 && adjustedIndex % a == 0;
+    } else {
+      // Just a number
+      try {
+        int target = std::stoi(formula);
+        return index == target;
+      } catch (...) {
+        return false;
+      }
+    }
+  }
+
+  bool matchNotPseudoClass(dom::ElementPtr element, const std::string &name) {
+    // Simplified :not() support - just check if it's a class or id
+    // Full implementation would parse nested selectors
+    if (name.size() >= 5 && name.substr(0, 4) == "not(" && name.back() == ')') {
+      std::string inner = name.substr(4, name.size() - 5);
+      if (!inner.empty()) {
+        if (inner[0] == '.') {
+          return element->hasClass(inner.substr(1));
+        } else if (inner[0] == '#') {
+          return element->id() == inner.substr(1);
+        } else {
+          // Assume it's a tag name
+          return dom::toLower(inner) == dom::toLower(element->localName());
+        }
+      }
+    }
+    return false;
   }
 
   void applyDeclarations(ComputedStyle &style,
@@ -386,6 +541,32 @@ private:
         try {
           style.zIndex = std::stoi(decl.value);
         } catch (...) {}
+      } else if (decl.property == "opacity") {
+        try {
+          style.opacity = std::stof(decl.value);
+        } catch (...) {
+          style.opacity = 1.0f;
+        }
+      } else if (decl.property == "transform") {
+        if (decl.value != "none") {
+          style.transform = decl.value;
+        }
+      } else if (decl.property == "filter") {
+        if (decl.value != "none") {
+          style.filter = decl.value;
+        }
+      } else if (decl.property == "perspective") {
+        if (decl.value != "none") {
+          style.perspective = decl.value;
+        }
+      } else if (decl.property == "will-change") {
+        style.willChange = decl.value;
+      } else if (decl.property == "isolation") {
+        if (decl.value == "isolate") {
+          style.isolation = Isolation::Isolate;
+        } else {
+          style.isolation = Isolation::Auto;
+        }
       } else if (decl.property == "position") {
         if (decl.value == "static")
           style.position = Position::Static;

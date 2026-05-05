@@ -184,6 +184,102 @@ public:
 
   std::string outerHTML() const { return toHtml(); }
 
+  // Pseudo-class support methods
+  bool isFirstChild() const {
+    auto prev = previousSibling();
+    return !prev;
+  }
+
+  bool isLastChild() const {
+    auto next = nextSibling();
+    return !next;
+  }
+
+  bool isOnlyChild() const {
+    return isFirstChild() && isLastChild();
+  }
+
+  bool isEmpty() const {
+    return childNodes_.empty();
+  }
+
+  bool isDocumentRoot() const {
+    return localName_ == "html";
+  }
+
+  int getElementSiblingIndex() const {
+    int index = 1; // nth-child is 1-indexed
+    ElementPtr prev = previousElementSibling();
+    while (prev) {
+      index++;
+      prev = prev->previousElementSibling();
+    }
+    return index;
+  }
+
+  int getElementSiblingIndexFromEnd() const {
+    int index = 1;
+    ElementPtr next = nextElementSibling();
+    while (next) {
+      index++;
+      next = next->nextElementSibling();
+    }
+    return index;
+  }
+
+  int getElementSiblingIndexOfType() const {
+    int index = 1;
+    ElementPtr prev = previousElementSibling();
+    while (prev) {
+      if (prev->localName() == localName_) {
+        index++;
+      }
+      prev = prev->previousElementSibling();
+    }
+    return index;
+  }
+
+  bool isHovered() const {
+    return hasStateFlag(ElementState::Hovered);
+  }
+
+  bool isActive() const {
+    return hasStateFlag(ElementState::Active);
+  }
+
+  bool isFocused() const {
+    return hasStateFlag(ElementState::Focused);
+  }
+
+  bool isChecked() const {
+    return hasStateFlag(ElementState::Checked);
+  }
+
+  bool isDisabled() const {
+    return hasAttribute("disabled");
+  }
+
+  bool isLink() const {
+    return localName_ == "a" && hasAttribute("href");
+  }
+
+  bool isVisited() const {
+    return hasStateFlag(ElementState::Visited);
+  }
+
+  void setStateFlag(ElementState state, bool value) {
+    if (value) {
+      stateFlags_ |= static_cast<uint32_t>(state);
+    } else {
+      stateFlags_ &= ~static_cast<uint32_t>(state);
+    }
+    notifyMutation();
+  }
+
+  bool hasStateFlag(ElementState state) const {
+    return (stateFlags_ & static_cast<uint32_t>(state)) != 0;
+  }
+
   ElementPtr firstElementChild() const {
     for (const auto &child : childNodes_) {
       if (child->nodeType() == NodeType::Element) {
@@ -400,6 +496,7 @@ private:
   std::string namespaceUri_;
   std::string prefix_;
   std::vector<Attribute> attributes_;
+  uint32_t stateFlags_ = 0;
 };
 
 class Document : public Node {

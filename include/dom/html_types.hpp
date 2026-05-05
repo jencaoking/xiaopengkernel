@@ -164,6 +164,19 @@ enum class NodeType : uint8_t {
 // Dirty flag for incremental update: Layout > Paint > Clean
 enum class DirtyFlag : uint8_t { Clean = 0, NeedsPaint = 1, NeedsLayout = 2 };
 
+// Element state flags for pseudo-class matching
+enum class ElementState : uint32_t {
+  Hovered = 1 << 0,
+  Active = 1 << 1,
+  Focused = 1 << 2,
+  Checked = 1 << 3,
+  Visited = 1 << 4,
+  Disabled = 1 << 5,
+  Enabled = 1 << 6,
+  Required = 1 << 7,
+  Optional = 1 << 8
+};
+
 class Node;
 using NodePtr = std::shared_ptr<Node>;
 using WeakNodePtr = std::weak_ptr<Node>;

@@ -83,6 +83,91 @@ public:
     return children_.back();
   }
 
+  // Stacking context support
+  bool createsStackingContext() const {
+    const auto &s = style_;
+    
+    // Root element creates stacking context
+    if (node_ && node_->nodeType() == dom::NodeType::Element) {
+      auto elem = std::static_pointer_cast<dom::Element>(node_);
+      if (elem->localName() == "html") {
+        return true;
+      }
+    }
+
+    // position: fixed or sticky
+    if (s.position == css::Position::Fixed || s.position == css::Position::Sticky) {
+      return true;
+    }
+
+    // position: absolute or relative with z-index != auto
+    if ((s.position == css::Position::Absolute || s.position == css::Position::Relative) &&
+        s.zIndex != 0) {
+      return true;
+    }
+
+    // opacity < 1
+    if (s.opacity < 1.0f && s.opacity >= 0.0f) {
+      return true;
+    }
+
+    // transform != none
+    if (!s.transform.empty()) {
+      return true;
+    }
+
+    // filter != none
+    if (!s.filter.empty()) {
+      return true;
+    }
+
+    // perspective != none
+    if (!s.perspective.empty()) {
+      return true;
+    }
+
+    // isolation: isolate
+    if (s.isolation == css::Isolation::Isolate) {
+      return true;
+    }
+
+    // will-change with stacking context properties
+    if (!s.willChange.empty()) {
+      std::string willChange = s.willChange;
+      if (willChange.find("transform") != std::string::npos ||
+          willChange.find("opacity") != std::string::npos ||
+          willChange.find("filter") != std::string::npos ||
+          willChange.find("perspective") != std::string::npos) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Get stacking level within parent stacking context
+  int stackingLevel() const {
+    const auto &s = style_;
+    
+    if (createsStackingContext()) {
+      return s.zIndex;
+    }
+    
+    return 0;
+  }
+
+  // Find the nearest ancestor stacking context
+  LayoutBoxPtr nearestStackingContext() const {
+    auto parent = parent_.lock();
+    while (parent) {
+      if (parent->createsStackingContext()) {
+        return parent;
+      }
+      parent = parent->parent_.lock();
+    }
+    return nullptr;
+  }
+
 private:
   BoxType type_;
   css::ComputedStyle style_;

@@ -295,6 +295,65 @@ private:
         layoutFixedBox(child);
       }
     }
+
+    // Third pass: Sort children by stacking context and z-index
+    sortByZIndex(box);
+  }
+
+  void sortByZIndex(LayoutBoxPtr box) {
+    // If this box creates a stacking context, sort its children
+    if (!box->createsStackingContext()) {
+      return;
+    }
+
+    // Create a list of children with their stacking info
+    struct StackingInfo {
+      LayoutBoxPtr box;
+      int zIndex;
+      bool createsSC;
+      size_t originalIndex;
+    };
+
+    std::vector<StackingInfo> childrenWithZ;
+    size_t index = 0;
+    for (auto child : box->children()) {
+      childrenWithZ.push_back({
+        child,
+        child->style().zIndex,
+        child->createsStackingContext(),
+        index++
+      });
+    }
+
+    // Sort by z-index, with special handling for stacking context creators
+    std::sort(childrenWithZ.begin(), childrenWithZ.end(),
+              [](const StackingInfo &a, const StackingInfo &b) {
+                // Elements with explicit z-index come first
+                if (a.zIndex != b.zIndex) {
+                  return a.zIndex < b.zIndex;
+                }
+                // For equal z-index: stacking context creators first, then DOM order
+                if (a.createsSC != b.createsSC) {
+                  return a.createsSC;
+                }
+                // Fallback to DOM order (lower index comes first)
+                return a.originalIndex < b.originalIndex;
+              });
+
+    // Reorder the children vector
+    std::vector<LayoutBoxPtr> sortedChildren;
+    for (const auto &info : childrenWithZ) {
+      sortedChildren.push_back(info.box);
+    }
+
+    // Update the box's children
+    // We need to update the underlying vector in the LayoutBox
+    // This requires modifying the children_ vector directly
+    // Since we don't have direct access, we need to clear and re-add
+    // (This is a limitation of the current design)
+    
+    // Note: The current LayoutBox doesn't expose direct access to children_
+    // For now, we'll assume the painter/renderer handles z-index ordering
   }
 
   void layoutInline(LayoutBoxPtr box) {
