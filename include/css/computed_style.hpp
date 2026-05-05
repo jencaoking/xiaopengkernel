@@ -105,6 +105,51 @@ enum class TextAlign { Left, Right, Center, Justify };
 
 enum class Overflow { Visible, Hidden, Scroll, Auto };
 
+// Grid specific properties
+enum class GridAutoFlow {
+  Row, Column, RowDense, ColumnDense
+};
+
+enum class GridJustifyItems {
+  Start, End, Center, Stretch, Auto
+};
+
+enum class GridAlignItems {
+  Start, End, Center, Stretch, Auto
+};
+
+enum class GridJustifyContent {
+  Start, End, Center, Stretch, SpaceAround, SpaceBetween, SpaceEvenly
+};
+
+enum class GridAlignContent {
+  Start, End, Center, Stretch, SpaceAround, SpaceBetween, SpaceEvenly
+};
+
+enum class GridJustifySelf {
+  Auto, Start, End, Center, Stretch
+};
+
+enum class GridAlignSelf {
+  Auto, Start, End, Center, Stretch
+};
+
+struct TrackSize {
+  enum class Type {
+    Auto,
+    Px,
+    Percent,
+    Fr
+  };
+  Type type = Type::Auto;
+  float value = 0.0f;
+  
+  static TrackSize Auto() { return {Type::Auto, 0.0f}; }
+  static TrackSize Px(float v) { return {Type::Px, v}; }
+  static TrackSize Percent(float v) { return {Type::Percent, v}; }
+  static TrackSize Fr(float v) { return {Type::Fr, v}; }
+};
+
 // Holds the computed style for a DOM element
 struct ComputedStyle {
   // Layout properties
@@ -161,6 +206,27 @@ struct ComputedStyle {
   float flexGrow = 0.0f;
   float flexShrink = 1.0f;
   Length flexBasis = Length::Auto();
+
+  // Grid container properties
+  GridAutoFlow gridAutoFlow = GridAutoFlow::Row;
+  std::vector<TrackSize> gridTemplateColumns;
+  std::vector<TrackSize> gridTemplateRows;
+  std::vector<TrackSize> gridAutoColumns;
+  std::vector<TrackSize> gridAutoRows;
+  Length gridColumnGap = Length::Px(0);
+  Length gridRowGap = Length::Px(0);
+  GridJustifyItems gridJustifyItems = GridJustifyItems::Stretch;
+  GridAlignItems gridAlignItems = GridAlignItems::Stretch;
+  GridJustifyContent gridJustifyContent = GridJustifyContent::Start;
+  GridAlignContent gridAlignContent = GridAlignContent::Start;
+  
+  // Grid item properties
+  int gridColumnStart = 1;
+  int gridColumnEnd = 2;
+  int gridRowStart = 1;
+  int gridRowEnd = 2;
+  GridJustifySelf gridJustifySelf = GridJustifySelf::Auto;
+  GridAlignSelf gridAlignSelf = GridAlignSelf::Auto;
 
   // Position properties
   Length top = Length::Auto();
