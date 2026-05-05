@@ -935,6 +935,36 @@ set_target_properties(test_websocket PROPERTIES
 )
 add_test(NAME WebSocketTests COMMAND test_websocket)
 
+# Test CSS Animation
+add_executable(test_css_animation tests/test_css_animation.cpp src/css/css_animation.cpp)
+target_include_directories(test_css_animation PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_css_animation PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_css_animation PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_css_animation PRIVATE CURL_STATICLIB)
+set_target_properties(test_css_animation PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME CSSAnimationTests COMMAND test_css_animation)
+
 add_custom_target(run
     COMMAND ${PROJECT_NAME}
     DEPENDS ${PROJECT_NAME}
