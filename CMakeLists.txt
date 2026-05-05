@@ -5,22 +5,47 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD_EXTENSIONS OFF)
 
-set(CURL_ROOT "${CMAKE_SOURCE_DIR}/third_party/curl")
-set(CURL_INCLUDE_DIR "${CURL_ROOT}/include")
-set(CURL_LIBRARY "${CURL_ROOT}/lib/libcurl.a")
+# Platform detection
+if(WIN32)
+    set(MINGW_BUILD TRUE)
+else()
+    set(MINGW_BUILD FALSE)
+endif()
+
+# CURL Configuration - support both MinGW bundled and Linux system library
+if(MINGW_BUILD)
+    set(CURL_ROOT "${CMAKE_SOURCE_DIR}/third_party/curl")
+    set(CURL_INCLUDE_DIR "${CURL_ROOT}/include")
+    set(CURL_LIBRARY "${CURL_ROOT}/lib/libcurl.a")
+else()
+    find_package(CURL REQUIRED)
+    set(CURL_INCLUDE_DIR ${CURL_INCLUDE_DIRS})
+    set(CURL_LIBRARY CURL::libcurl)
+endif()
 
 # SDL2 Configuration
-set(SDL2_ROOT "${CMAKE_SOURCE_DIR}/third_party/SDL2-2.28.5/x86_64-w64-mingw32")
-if(EXISTS "${SDL2_ROOT}")
-    set(SDL2_INCLUDE_DIR "${SDL2_ROOT}/include/SDL2")
-    set(SDL2_LIBRARY "${SDL2_ROOT}/lib/libSDL2.a")
-    set(SDL2_MAIN_LIBRARY "${SDL2_ROOT}/lib/libSDL2main.a")
-    
-    include_directories(${SDL2_INCLUDE_DIR})
-    add_compile_definitions(ENABLE_SDL)
-    message(STATUS "SDL2 found at ${SDL2_ROOT}")
+if(MINGW_BUILD)
+    set(SDL2_ROOT "${CMAKE_SOURCE_DIR}/third_party/SDL2-2.28.5/x86_64-w64-mingw32")
+    if(EXISTS "${SDL2_ROOT}")
+        set(SDL2_INCLUDE_DIR "${SDL2_ROOT}/include/SDL2")
+        set(SDL2_LIBRARY "${SDL2_ROOT}/lib/libSDL2.a")
+        set(SDL2_MAIN_LIBRARY "${SDL2_ROOT}/lib/libSDL2main.a")
+        
+        include_directories(${SDL2_INCLUDE_DIR})
+        add_compile_definitions(ENABLE_SDL)
+        message(STATUS "SDL2 found at ${SDL2_ROOT}")
+    else()
+        message(WARNING "SDL2 not found at ${SDL2_ROOT}. Window support will be disabled.")
+    endif()
 else()
-    message(WARNING "SDL2 not found at ${SDL2_ROOT}. Window support will be disabled.")
+    find_package(SDL2 QUIET)
+    if(SDL2_FOUND)
+        include_directories(${SDL2_INCLUDE_DIRS})
+        add_compile_definitions(ENABLE_SDL)
+        message(STATUS "SDL2 found (system): ${SDL2_INCLUDE_DIRS}")
+    else()
+        message(WARNING "SDL2 not found. Window support will be disabled.")
+    endif()
 endif()
 
 # QuickJS Configuration
@@ -167,6 +192,7 @@ else()
     )
 endif()
 
+if(MINGW_BUILD)
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -189,6 +215,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     shlwapi
     bcrypt
 )
+else()
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    ${CURL_LIBRARY}
+    curl
+    pthread
+)
+endif()
 
 if(EXISTS "${SDL2_ROOT}")
     target_link_libraries(${PROJECT_NAME} PRIVATE 
@@ -314,6 +347,7 @@ enable_testing()
 # Test Layout
 add_executable(test_layout tests/test_layout.cpp src/renderer/font_manager.cpp src/renderer/text_shaper.cpp)
 target_include_directories(test_layout PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
 target_link_libraries(test_layout PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -330,6 +364,9 @@ target_link_libraries(test_layout PRIVATE
     ${CURL_ROOT}/lib/libpsl.a
     ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
 )
+else()
+target_link_libraries(test_layout PRIVATE ${CURL_LIBRARY})
+endif()
 target_compile_definitions(test_layout PRIVATE CURL_STATICLIB)
 if(ENABLE_FREETYPE)
     target_link_libraries(test_layout PRIVATE ${FREETYPE_LIBRARIES} stdc++ rpcrt4)
@@ -339,6 +376,7 @@ set_target_properties(test_layout PROPERTIES WIN32_EXECUTABLE FALSE)
 # Test Renderer
 add_executable(test_renderer tests/test_renderer.cpp src/renderer/bitmap_canvas.cpp src/renderer/painting_algorithm.cpp src/renderer/image.cpp src/renderer/font_manager.cpp src/renderer/text_shaper.cpp)
 target_include_directories(test_renderer PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
 target_link_libraries(test_renderer PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -355,6 +393,9 @@ target_link_libraries(test_renderer PRIVATE
     ${CURL_ROOT}/lib/libpsl.a
     ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
 )
+else()
+target_link_libraries(test_renderer PRIVATE ${CURL_LIBRARY})
+endif()
 target_compile_definitions(test_renderer PRIVATE CURL_STATICLIB)
 if(ENABLE_FREETYPE)
     target_link_libraries(test_renderer PRIVATE ${FREETYPE_LIBRARIES} stdc++ rpcrt4)
@@ -369,9 +410,16 @@ list(FILTER TEST_SOURCES EXCLUDE REGEX "test_opengl.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_gpu_acceleration.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_resource_tree.cpp")
 
-# Exclude flexbox tests from loader_tests to avoid multiple mains
+# Exclude flexbox, positioning, and dom binding tests from loader_tests to avoid multiple mains
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_flexbox.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_flexbox_advanced.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_positioning.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_dom_binding.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_event.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_incremental.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_grid.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_stacking.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_event_loop.cpp")
 
 add_executable(loader_tests ${TEST_SOURCES})
 
@@ -401,6 +449,7 @@ else()
     )
 endif()
 
+if(MINGW_BUILD)
 target_link_libraries(loader_tests PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -424,6 +473,9 @@ target_link_libraries(loader_tests PRIVATE
     iphlpapi
     bcrypt
 )
+else()
+target_link_libraries(loader_tests PRIVATE ${CURL_LIBRARY})
+endif()
 
 # Add SDL2 and OpenGL libraries if available
 if(EXISTS "${SDL2_ROOT}")
@@ -459,6 +511,7 @@ add_test(NAME LoaderTests COMMAND loader_tests)
 # Test ParseThread (multi-threaded parsing)
 add_executable(test_parse_thread tests/test_parse_thread.cpp)
 target_include_directories(test_parse_thread PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
 target_link_libraries(test_parse_thread PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -475,6 +528,9 @@ target_link_libraries(test_parse_thread PRIVATE
     ${CURL_ROOT}/lib/libpsl.a
     ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
 )
+else()
+target_link_libraries(test_parse_thread PRIVATE ${CURL_LIBRARY})
+endif()
 target_compile_definitions(test_parse_thread PRIVATE CURL_STATICLIB)
 set_target_properties(test_parse_thread PROPERTIES 
     WIN32_EXECUTABLE FALSE
@@ -485,6 +541,7 @@ add_test(NAME ParseThreadTests COMMAND test_parse_thread)
 # Test ResourceTree (resource dependency management)
 add_executable(test_resource_tree tests/test_resource_tree.cpp)
 target_include_directories(test_resource_tree PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
 target_link_libraries(test_resource_tree PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -501,6 +558,9 @@ target_link_libraries(test_resource_tree PRIVATE
     ${CURL_ROOT}/lib/libpsl.a
     ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
 )
+else()
+target_link_libraries(test_resource_tree PRIVATE ${CURL_LIBRARY})
+endif()
 target_compile_definitions(test_resource_tree PRIVATE CURL_STATICLIB)
 set_target_properties(test_resource_tree PROPERTIES 
     WIN32_EXECUTABLE FALSE
@@ -511,6 +571,7 @@ add_test(NAME ResourceTreeTests COMMAND test_resource_tree)
 # Test Flexbox
 add_executable(test_flexbox tests/test_flexbox.cpp)
 target_include_directories(test_flexbox PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
 target_link_libraries(test_flexbox PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -527,6 +588,9 @@ target_link_libraries(test_flexbox PRIVATE
     ${CURL_ROOT}/lib/libpsl.a
     ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
 )
+else()
+target_link_libraries(test_flexbox PRIVATE ${CURL_LIBRARY})
+endif()
 target_compile_definitions(test_flexbox PRIVATE CURL_STATICLIB)
 set_target_properties(test_flexbox PROPERTIES 
     WIN32_EXECUTABLE FALSE
@@ -537,6 +601,7 @@ add_test(NAME FlexboxTests COMMAND test_flexbox)
 # Test Flexbox Advanced
 add_executable(test_flexbox_advanced tests/test_flexbox_advanced.cpp)
 target_include_directories(test_flexbox_advanced PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
 target_link_libraries(test_flexbox_advanced PRIVATE 
     ${CURL_ROOT}/lib/libcurl.a
     ${CURL_ROOT}/lib/libnghttp2.a
@@ -553,12 +618,262 @@ target_link_libraries(test_flexbox_advanced PRIVATE
     ${CURL_ROOT}/lib/libpsl.a
     ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
 )
+else()
+target_link_libraries(test_flexbox_advanced PRIVATE ${CURL_LIBRARY})
+endif()
 target_compile_definitions(test_flexbox_advanced PRIVATE CURL_STATICLIB)
 set_target_properties(test_flexbox_advanced PROPERTIES 
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
 add_test(NAME FlexboxAdvancedTests COMMAND test_flexbox_advanced)
+
+# Test Positioning
+add_executable(test_positioning tests/test_positioning.cpp)
+target_include_directories(test_positioning PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_positioning PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_positioning PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_positioning PRIVATE CURL_STATICLIB)
+set_target_properties(test_positioning PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME PositioningTests COMMAND test_positioning)
+
+# Test DOM Binding
+add_executable(test_dom_binding tests/test_dom_binding.cpp)
+target_include_directories(test_dom_binding PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(test_dom_binding PRIVATE "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_dom_binding PRIVATE ENABLE_QUICKJS)
+if(MINGW_BUILD)
+target_link_libraries(test_dom_binding PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_dom_binding PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_dom_binding PRIVATE CURL_STATICLIB)
+target_link_libraries(test_dom_binding PRIVATE xiaopengkernel_core quickjs)
+set_target_properties(test_dom_binding PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME DOMBindingTests COMMAND test_dom_binding)
+
+# Test Event System
+add_executable(test_event tests/test_event.cpp)
+target_include_directories(test_event PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(test_event PRIVATE "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_event PRIVATE ENABLE_QUICKJS)
+if(MINGW_BUILD)
+target_link_libraries(test_event PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_event PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_event PRIVATE CURL_STATICLIB)
+target_link_libraries(test_event PRIVATE xiaopengkernel_core quickjs)
+set_target_properties(test_event PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME EventTests COMMAND test_event)
+
+# Test Incremental Update System
+add_executable(test_incremental tests/test_incremental.cpp)
+target_include_directories(test_incremental PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_incremental PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_incremental PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_incremental PRIVATE CURL_STATICLIB)
+target_link_libraries(test_incremental PRIVATE xiaopengkernel_core quickjs)
+set_target_properties(test_incremental PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME IncrementalTests COMMAND test_incremental)
+
+# Test Grid Layout
+add_executable(test_grid tests/test_grid.cpp)
+target_include_directories(test_grid PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_grid PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_grid PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_grid PRIVATE CURL_STATICLIB)
+set_target_properties(test_grid PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME GridTests COMMAND test_grid)
+
+# Test Stacking Context
+add_executable(test_stacking tests/test_stacking.cpp)
+target_include_directories(test_stacking PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_stacking PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_stacking PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_stacking PRIVATE CURL_STATICLIB)
+set_target_properties(test_stacking PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME StackingTests COMMAND test_stacking)
+
+# Test Event Loop and History API
+add_executable(test_event_loop tests/test_event_loop.cpp src/engine/event_loop.cpp src/engine/browsing_context.cpp)
+target_include_directories(test_event_loop PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_event_loop PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_event_loop PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_event_loop PRIVATE CURL_STATICLIB)
+set_target_properties(test_event_loop PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME EventLoopTests COMMAND test_event_loop)
+
+# Test Page Lifecycle
+add_executable(test_page_lifecycle tests/test_page_lifecycle.cpp src/engine/event_loop.cpp src/engine/browsing_context.cpp src/engine/page_lifecycle.cpp src/script/promise_binding_simple.cpp)
+target_include_directories(test_page_lifecycle PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_page_lifecycle PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_page_lifecycle PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_page_lifecycle PRIVATE CURL_STATICLIB)
+set_target_properties(test_page_lifecycle PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME PageLifecycleTests COMMAND test_page_lifecycle)
 
 add_custom_target(run
     COMMAND ${PROJECT_NAME}
@@ -569,6 +884,7 @@ add_custom_target(run
 ## Minimal Demo: standalone executable for end-to-end demonstration
 add_executable(minimal_demo src/demo_minimal_main.cpp $<TARGET_OBJECTS:xiaopengkernel_core>)
 target_include_directories(minimal_demo PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
 target_link_libraries(minimal_demo PRIVATE
   ${CURL_ROOT}/lib/libcurl.a
   ${CURL_ROOT}/lib/libnghttp2.a
@@ -585,6 +901,9 @@ target_link_libraries(minimal_demo PRIVATE
   ${CURL_ROOT}/lib/libpsl.a
   ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
 )
+else()
+target_link_libraries(minimal_demo PRIVATE ${CURL_LIBRARY})
+endif()
 if(EXISTS "${SDL2_ROOT}")
   target_link_libraries(minimal_demo PRIVATE mingw32
       ${SDL2_MAIN_LIBRARY}

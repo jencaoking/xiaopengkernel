@@ -33,7 +33,7 @@ void testFlexWrap() {
     ComputedStyle itemStyle;
     itemStyle.width = Length::Px(100);
     itemStyle.height = Length::Px(40);
-    itemStyle.flexGrow = Length::Px(0);
+    itemStyle.flexGrow = 0.0f;
 
     LayoutBoxPtr item = std::make_shared<LayoutBox>(
       BoxType::BlockNode, itemStyle, nullptr);
@@ -79,7 +79,7 @@ void testJustifyContent() {
     ComputedStyle itemStyle;
     itemStyle.width = Length::Px(80);
     itemStyle.height = Length::Px(40);
-    itemStyle.flexGrow = Length::Px(0);
+    itemStyle.flexGrow = 0.0f;
 
     LayoutBoxPtr item = std::make_shared<LayoutBox>(
       BoxType::BlockNode, itemStyle, nullptr);
@@ -108,7 +108,7 @@ void testJustifyContent() {
     ComputedStyle itemStyle;
     itemStyle.width = Length::Px(80);
     itemStyle.height = Length::Px(40);
-    itemStyle.flexGrow = Length::Px(0);
+    itemStyle.flexGrow = 0.0f;
 
     LayoutBoxPtr item = std::make_shared<LayoutBox>(
       BoxType::BlockNode, itemStyle, nullptr);
@@ -141,7 +141,7 @@ void testAlignItems() {
     ComputedStyle itemStyle;
     itemStyle.width = Length::Px(80);
     itemStyle.height = Length::Px(40 + i * 20); // Different heights
-    itemStyle.flexGrow = Length::Px(0);
+    itemStyle.flexGrow = 0.0f;
 
     LayoutBoxPtr item = std::make_shared<LayoutBox>(
       BoxType::BlockNode, itemStyle, nullptr);
@@ -180,17 +180,17 @@ void testFlexGrow() {
   ComputedStyle itemStyle1;
   itemStyle1.width = Length::Px(100);
   itemStyle1.height = Length::Px(40);
-  itemStyle1.flexGrow = Length::Px(1);
+  itemStyle1.flexGrow = 1.0f;
 
   ComputedStyle itemStyle2;
   itemStyle2.width = Length::Px(100);
   itemStyle2.height = Length::Px(40);
-  itemStyle2.flexGrow = Length::Px(2);
+  itemStyle2.flexGrow = 2.0f;
 
   ComputedStyle itemStyle3;
   itemStyle3.width = Length::Px(100);
   itemStyle3.height = Length::Px(40);
-  itemStyle3.flexGrow = Length::Px(0);
+  itemStyle3.flexGrow = 0.0f;
 
   LayoutBoxPtr item1 = std::make_shared<LayoutBox>(
     BoxType::BlockNode, itemStyle1, nullptr);

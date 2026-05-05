@@ -164,6 +164,19 @@ enum class NodeType : uint8_t {
 // Dirty flag for incremental update: Layout > Paint > Clean
 enum class DirtyFlag : uint8_t { Clean = 0, NeedsPaint = 1, NeedsLayout = 2 };
 
+// Element state flags for pseudo-class matching
+enum class ElementState : uint32_t {
+  Hovered = 1 << 0,
+  Active = 1 << 1,
+  Focused = 1 << 2,
+  Checked = 1 << 3,
+  Visited = 1 << 4,
+  Disabled = 1 << 5,
+  Enabled = 1 << 6,
+  Required = 1 << 7,
+  Optional = 1 << 8
+};
+
 class Node;
 using NodePtr = std::shared_ptr<Node>;
 using WeakNodePtr = std::weak_ptr<Node>;
@@ -415,6 +428,32 @@ public:
   // Event listener IDs (the actual JS callbacks are stored in EventBinding)
   // Map: eventType -> list of listener IDs
   std::unordered_map<std::string, std::vector<uint32_t>> eventListenerIds_;
+
+  // Add an event listener
+  void addEventListener(const std::string &type, uint32_t listenerId) {
+    eventListenerIds_[type].push_back(listenerId);
+  }
+
+  // Remove an event listener
+  void removeEventListener(const std::string &type, uint32_t listenerId) {
+    auto it = eventListenerIds_.find(type);
+    if (it != eventListenerIds_.end()) {
+      auto &ids = it->second;
+      ids.erase(std::remove(ids.begin(), ids.end(), listenerId), ids.end());
+      if (ids.empty()) {
+        eventListenerIds_.erase(it);
+      }
+    }
+  }
+
+  // Get listeners for an event
+  const std::vector<uint32_t> *getEventListeners(const std::string &type) const {
+    auto it = eventListenerIds_.find(type);
+    if (it != eventListenerIds_.end()) {
+      return &it->second;
+    }
+    return nullptr;
+  }
 };
 
 class TextNode : public Node {

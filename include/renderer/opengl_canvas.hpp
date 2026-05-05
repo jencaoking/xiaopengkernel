@@ -50,6 +50,9 @@ public:
   int width() const override { return width_; }
   int height() const override { return height_; }
 
+  void pushClipRect(int x, int y, int width, int height) override;
+  void popClipRect() override;
+
   // OpenGL-specific methods
   GLuint getTexture() const { return texture_; }
   void bindTexture();
@@ -69,6 +72,12 @@ private:
   std::string currentFontFamily_ = "Arial";
   int currentFontSize_ = 16;
 
+  // Clipping
+  struct ClipRect {
+    int x, y, width, height;
+  };
+  std::vector<ClipRect> clipStack_;
+
   void initializeOpenGL();
   void cleanupOpenGL();
   void updateTexture(const void* data);
@@ -77,6 +86,8 @@ private:
   void setPixel(int x, int y, Color color);
   void blendPixel(int x, int y, Color color);
   void fillRectSoftware(int x, int y, int width, int height, Color color);
+  bool isInClip(int x, int y) const;
+  void intersectWithClip(int& x, int& y, int& width, int& height) const;
 };
 
 } // namespace renderer

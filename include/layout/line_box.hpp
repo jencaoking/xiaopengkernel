@@ -34,6 +34,7 @@ public:
   }
 
   const std::vector<BoxFragment> &fragments() const { return fragments_; }
+  std::vector<BoxFragment> &fragments() { return fragments_; }
 
   float width() const { return width_; }
   float height() const { return height_; }
@@ -42,6 +43,12 @@ public:
 
   void setHeight(float h) { height_ = h; }
   void setWidth(float w) { width_ = w; }
+
+  void shiftFragmentsX(float offset) {
+    for (auto &fragment : fragments_) {
+      fragment.x += offset;
+    }
+  }
 
 private:
   std::vector<BoxFragment> fragments_;

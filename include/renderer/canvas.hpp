@@ -50,6 +50,10 @@ public:
   // Accessors
   virtual int width() const = 0;
   virtual int height() const = 0;
+
+  // Clipping
+  virtual void pushClipRect(int x, int y, int width, int height) = 0;
+  virtual void popClipRect() = 0;
 };
 
 } // namespace renderer

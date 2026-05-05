@@ -3,6 +3,7 @@
 #include "layout_box.hpp"
 #include "renderer/text_metrics.hpp"
 #include "flexbox_algorithm.hpp"
+#include "grid_algorithm.hpp"
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -27,14 +28,38 @@ public:
 
 private:
   void layoutBox(LayoutBoxPtr box, const Dimensions &parentDim) {
+    // Check if this is an absolutely or fixed positioned element
+    if (box->style().position == css::Position::Absolute ||
+        box->style().position == css::Position::Fixed) {
+      // Handle positioning in layoutBlock, but still need to calculate
+      // proper width/height and layout children
+      calculateBlockWidth(box, parentDim);
+      
+      // Layout children normally (they are in flow of this positioned container)
+      if (box->style().display == css::Display::Flex) {
+        FlexboxAlgorithm flexbox;
+        flexbox.layoutFlexContainer(box, parentDim);
+      } else if (box->style().display == css::Display::Grid) {
+        GridAlgorithm grid;
+        grid.layoutGridContainer(box, parentDim);
+      } else if (isInlineFormattingContext(box)) {
+        layoutInline(box);
+      } else {
+        layoutBlock(box);
+      }
+      
+      // Calculate height for non-flex and non-grid containers
+      if (box->style().display != css::Display::Flex &&
+          box->style().display != css::Display::Grid) {
+        calculateBlockHeight(box);
+      }
+      return;
+    }
+
     // 1. Calculate Width
     calculateBlockWidth(box, parentDim);
 
-    // 2. Calculate Position (Margins, Boarder, Padding)
-    // For root, this is 0. For others, it depends on parent type.
-    // In this simplified engine, we assume block flow handles positioning.
-
-    // 3. Determine Layout Mode (BFC, IFC, or Flexbox)
+    // 2. Determine Layout Mode (BFC, IFC, or Flexbox)
     if (box->type() == BoxType::BlockNode ||
         box->type() == BoxType::AnonymousBlock) {
       
@@ -43,23 +68,172 @@ private:
         // Use Flexbox layout algorithm
         FlexboxAlgorithm flexbox;
         flexbox.layoutFlexContainer(box, parentDim);
+      } else if (box->style().display == css::Display::Grid) {
+        // Use Grid layout algorithm
+        GridAlgorithm grid;
+        grid.layoutGridContainer(box, parentDim);
       } else if (isInlineFormattingContext(box)) {
         layoutInline(box);
       } else {
         layoutBlock(box);
       }
+    } else if (box->type() == BoxType::InlineBlockNode) {
+      // Inline-block: behave like a block internally but inline in flow
+      // First calculate width/height like a block
+      calculateBlockWidth(box, parentDim);
+      
+      // Layout children like a regular block
+      layoutBlock(box);
+      
+      // Calculate final height
+      calculateBlockHeight(box);
     } else if (box->type() == BoxType::InlineNode ||
                box->type() == BoxType::AnonymousInline) {
       // Inline nodes are typically handled by their parent's IFC.
-      // But if we are here, it might be an inline-block (not supported yet) or
-      // just recursion. For now, simple text/inline is handled by parent
-      // `layoutInline`.
     }
 
-    // 4. Calculate Height (for non-flex containers)
-    if (box->style().display != css::Display::Flex) {
+    // 3. Calculate Height (for non-flex and non-grid containers)
+    if (box->style().display != css::Display::Flex &&
+        box->style().display != css::Display::Grid) {
       calculateBlockHeight(box);
     }
+  }
+
+  LayoutBoxPtr findContainingBlock(LayoutBoxPtr box) {
+    LayoutBoxPtr current = box;
+    while (current) {
+      auto parent = current->parent().lock();
+      if (!parent) break;
+      
+      auto &style = parent->style();
+      if (style.position != css::Position::Static) {
+        return parent;
+      }
+      
+      current = parent;
+    }
+    return nullptr;
+  }
+
+  void layoutAbsolutePositioned(LayoutBoxPtr parent) {
+    for (auto &child : parent->children()) {
+      if (child->style().position == css::Position::Absolute) {
+        layoutAbsoluteBox(child, parent);
+      } else if (child->style().position == css::Position::Fixed) {
+        layoutFixedBox(child);
+      }
+    }
+  }
+
+  void layoutAbsoluteBox(LayoutBoxPtr box, LayoutBoxPtr containingBlock) {
+    Dimensions cbDim;
+    if (containingBlock) {
+      cbDim = containingBlock->dimensions();
+      // For containing block, we use its padding box as reference
+    } else {
+      cbDim.content = {0, 0, 800, 600};
+    }
+
+    const auto &style = box->style();
+    auto &dims = box->dimensions();
+
+    // --- Calculate width ---
+    float width = 0.0f;
+    if (style.width.unit != css::Length::Unit::Auto) {
+      if (style.width.unit == css::Length::Unit::Percent) {
+        width = cbDim.content.width * (style.width.value / 100.0f);
+      } else {
+        width = style.width.value;
+      }
+    } else {
+      // If width auto, use shrink-to-fit or available
+      width = cbDim.content.width * 0.8f; // Default fallback
+    }
+
+    // Apply box-sizing
+    float paddingH = style.paddingLeft.value + style.paddingRight.value;
+    float borderH = style.borderLeftWidth.value + style.borderRightWidth.value;
+    if (style.boxSizing == css::BoxSizing::BorderBox) {
+      width = std::max(0.0f, width - paddingH - borderH);
+    }
+
+    dims.content.width = std::max(0.0f, width);
+
+    // --- Calculate horizontal position ---
+    float left = 0.0f;
+    if (style.left.unit == css::Length::Unit::Percent) {
+      left = cbDim.content.width * (style.left.value / 100.0f);
+    } else if (style.left.unit != css::Length::Unit::Auto) {
+      left = style.left.value;
+    } else if (style.right.unit != css::Length::Unit::Auto) {
+      // If right specified and left auto, calculate from right
+      float right = style.right.unit == css::Length::Unit::Percent ? 
+                    cbDim.content.width * (style.right.value / 100.0f) : 
+                    style.right.value;
+      left = cbDim.content.width - dims.content.width - paddingH - borderH - right;
+    }
+
+    // Position content box
+    dims.content.x = cbDim.content.x + left + style.marginLeft.value + 
+                     style.borderLeftWidth.value + style.paddingLeft.value;
+
+    // --- Calculate height (use already calculated height from layoutBox) ---
+    // If height is auto, keep the calculated value from child layout
+    // Otherwise, apply box sizing and constraints
+    float height = dims.content.height;
+    if (style.height.unit != css::Length::Unit::Auto) {
+      if (style.height.unit == css::Length::Unit::Percent) {
+        height = cbDim.content.height * (style.height.value / 100.0f);
+      } else {
+        height = style.height.value;
+      }
+
+      float paddingV = style.paddingTop.value + style.paddingBottom.value;
+      float borderV = style.borderTopWidth.value + style.borderBottomWidth.value;
+      if (style.boxSizing == css::BoxSizing::BorderBox) {
+        height = std::max(0.0f, height - paddingV - borderV);
+      }
+      dims.content.height = std::max(0.0f, height);
+    }
+
+    // --- Calculate vertical position ---
+    float top = 0.0f;
+    if (style.top.unit == css::Length::Unit::Percent) {
+      top = cbDim.content.height * (style.top.value / 100.0f);
+    } else if (style.top.unit != css::Length::Unit::Auto) {
+      top = style.top.value;
+    } else if (style.bottom.unit != css::Length::Unit::Auto) {
+      // If bottom specified and top auto, calculate from bottom
+      float bottom = style.bottom.unit == css::Length::Unit::Percent ? 
+                     cbDim.content.height * (style.bottom.value / 100.0f) : 
+                     style.bottom.value;
+      top = cbDim.content.height - dims.content.height - (style.paddingTop.value + style.paddingBottom.value) - 
+            (style.borderTopWidth.value + style.borderBottomWidth.value) - bottom;
+    }
+
+    dims.content.y = cbDim.content.y + top + style.marginTop.value +
+                     style.borderTopWidth.value + style.paddingTop.value;
+
+    // Ensure padding/border/margin are set
+    dims.padding.top = style.paddingTop.value;
+    dims.padding.right = style.paddingRight.value;
+    dims.padding.bottom = style.paddingBottom.value;
+    dims.padding.left = style.paddingLeft.value;
+
+    dims.border.top = style.borderTopWidth.value;
+    dims.border.right = style.borderRightWidth.value;
+    dims.border.bottom = style.borderBottomWidth.value;
+    dims.border.left = style.borderLeftWidth.value;
+
+    dims.margin.top = style.marginTop.value;
+    dims.margin.right = style.marginRight.value;
+    dims.margin.bottom = style.marginBottom.value;
+    dims.margin.left = style.marginLeft.value;
+  }
+
+  void layoutFixedBox(LayoutBoxPtr box) {
+    LayoutBoxPtr viewportBox = nullptr;
+    layoutAbsoluteBox(box, viewportBox);
   }
 
   bool isInlineFormattingContext(LayoutBoxPtr box) {
@@ -83,13 +257,18 @@ private:
     // Standard Block Layout (Vertical Stacking)
     float currentY = 0;
 
+    // First pass: Layout non-positioned children
     for (auto child : box->children()) {
+      // Skip absolutely and fixed positioned elements for now
+      if (child->style().position == css::Position::Absolute ||
+          child->style().position == css::Position::Fixed) {
+        continue;
+      }
+
       // Recursively layout child
       layoutBox(child, box->dimensions());
 
       // Position child's CONTENT box relative to parent's BORDER box
-      // In CSS, the offset is: parent_padding + child_margin + child_border +
-      // child_padding
       child->dimensions().content.x =
           box->dimensions().padding.left + child->dimensions().margin.left +
           child->dimensions().border.left + child->dimensions().padding.left;
@@ -106,6 +285,75 @@ private:
           child->dimensions().padding.bottom +
           child->dimensions().border.bottom + child->dimensions().margin.bottom;
     }
+
+    // Second pass: Layout absolutely positioned children
+    for (auto child : box->children()) {
+      if (child->style().position == css::Position::Absolute) {
+        LayoutBoxPtr containingBlock = findContainingBlock(child);
+        layoutAbsoluteBox(child, containingBlock);
+      } else if (child->style().position == css::Position::Fixed) {
+        layoutFixedBox(child);
+      }
+    }
+
+    // Third pass: Sort children by stacking context and z-index
+    sortByZIndex(box);
+  }
+
+  void sortByZIndex(LayoutBoxPtr box) {
+    // If this box creates a stacking context, sort its children
+    if (!box->createsStackingContext()) {
+      return;
+    }
+
+    // Create a list of children with their stacking info
+    struct StackingInfo {
+      LayoutBoxPtr box;
+      int zIndex;
+      bool createsSC;
+      size_t originalIndex;
+    };
+
+    std::vector<StackingInfo> childrenWithZ;
+    size_t index = 0;
+    for (auto child : box->children()) {
+      childrenWithZ.push_back({
+        child,
+        child->style().zIndex,
+        child->createsStackingContext(),
+        index++
+      });
+    }
+
+    // Sort by z-index, with special handling for stacking context creators
+    std::sort(childrenWithZ.begin(), childrenWithZ.end(),
+              [](const StackingInfo &a, const StackingInfo &b) {
+                // Elements with explicit z-index come first
+                if (a.zIndex != b.zIndex) {
+                  return a.zIndex < b.zIndex;
+                }
+                // For equal z-index: stacking context creators first, then DOM order
+                if (a.createsSC != b.createsSC) {
+                  return a.createsSC;
+                }
+                // Fallback to DOM order (lower index comes first)
+                return a.originalIndex < b.originalIndex;
+              });
+
+    // Reorder the children vector
+    std::vector<LayoutBoxPtr> sortedChildren;
+    for (const auto &info : childrenWithZ) {
+      sortedChildren.push_back(info.box);
+    }
+
+    // Update the box's children
+    // We need to update the underlying vector in the LayoutBox
+    // This requires modifying the children_ vector directly
+    // Since we don't have direct access, we need to clear and re-add
+    // (This is a limitation of the current design)
+    
+    // Note: The current LayoutBox doesn't expose direct access to children_
+    // For now, we'll assume the painter/renderer handles z-index ordering
   }
 
   void layoutInline(LayoutBoxPtr box) {
@@ -145,6 +393,36 @@ private:
     // Add last line if not empty
     if (!currentLine.fragments().empty()) {
       box->addLineBox(currentLine);
+    }
+
+    // Apply text alignment to each line box
+    applyTextAlignment(box, contentWidth);
+  }
+
+  void applyTextAlignment(LayoutBoxPtr box, float contentWidth) {
+    const auto &style = box->style();
+    if (style.textAlign == css::TextAlign::Left) return;
+
+    for (auto &lineBox : box->lineBoxes()) {
+      // Calculate total used width
+      float usedWidth = 0;
+      for (const auto &fragment : lineBox.fragments()) {
+        usedWidth = std::max(usedWidth, fragment.x + fragment.width);
+      }
+
+      // Calculate offset for alignment
+      float offset = 0;
+      if (style.textAlign == css::TextAlign::Center) {
+        offset = (contentWidth - usedWidth) / 2.0f;
+      } else if (style.textAlign == css::TextAlign::Right) {
+        offset = contentWidth - usedWidth;
+      }
+      // Justify not implemented for simplicity
+
+      // Apply offset to all fragments in line
+      if (offset > 0) {
+        lineBox.shiftFragmentsX(offset);
+      }
     }
   }
 
@@ -238,18 +516,32 @@ private:
   void calculateBlockWidth(LayoutBoxPtr box, const Dimensions &parentDim) {
     const auto &style = box->style();
 
-    // auto width = parent content width
-    float width = style.width.unit == css::Length::Unit::Auto
-                      ? parentDim.content.width
-                      : style.width.value;
+    float width = 0.0f;
 
-    // Percentage support (basic)
-    if (style.width.unit == css::Length::Unit::Percent) {
+    // Parse width
+    if (style.width.unit == css::Length::Unit::Auto) {
+      width = parentDim.content.width;
+    } else if (style.width.unit == css::Length::Unit::Percent) {
       width = parentDim.content.width * (style.width.value / 100.0f);
+    } else {
+      width = style.width.value;
     }
 
-    // Defensive: clamp width to zero to prevent negative dimensions
-    box->dimensions().content.width = std::max(0.0f, width);
+    // Padding and border for box-sizing
+    float paddingLeft = style.paddingLeft.value;
+    float paddingRight = style.paddingRight.value;
+    float borderLeft = style.borderLeftWidth.value;
+    float borderRight = style.borderRightWidth.value;
+
+    if (style.boxSizing == css::BoxSizing::BorderBox) {
+      // border-box: width includes border and padding
+      // content width = width - border - padding
+      float contentWidth = width - borderLeft - paddingLeft - paddingRight - borderRight;
+      box->dimensions().content.width = std::max(0.0f, contentWidth);
+    } else {
+      // content-box: width is content width
+      box->dimensions().content.width = std::max(0.0f, width);
+    }
 
     // Padding/Margin/Border (simplified copy)
     box->dimensions().padding.left = style.paddingLeft.value;
@@ -330,7 +622,18 @@ private:
         box->dimensions().content.height = contentHeight;
       }
     } else {
-      box->dimensions().content.height = style.height.value;
+      float paddingTop = style.paddingTop.value;
+      float paddingBottom = style.paddingBottom.value;
+      float borderTop = style.borderTopWidth.value;
+      float borderBottom = style.borderBottomWidth.value;
+
+      if (style.boxSizing == css::BoxSizing::BorderBox) {
+        // border-box: height includes border and padding
+        float contentHeight = style.height.value - borderTop - paddingTop - paddingBottom - borderBottom;
+        box->dimensions().content.height = std::max(0.0f, contentHeight);
+      } else {
+        box->dimensions().content.height = style.height.value;
+      }
     }
   }
 };

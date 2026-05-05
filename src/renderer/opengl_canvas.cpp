@@ -66,9 +66,63 @@ OpenGLCanvas::OpenGLCanvas(int width, int height)
   // drawText) still use software fallback even when OpenGL is enabled.
   fallbackBuffer_.resize(width * height, 0);
 
+  // Default clip: full canvas
+  clipStack_.push_back({0, 0, width, height});
+
 #ifdef ENABLE_OPENGL
   initializeOpenGL();
 #endif
+}
+
+bool OpenGLCanvas::isInClip(int x, int y) const {
+  if (clipStack_.empty())
+    return true;
+  const auto& clip = clipStack_.back();
+  return x >= clip.x && x < clip.x + clip.width && y >= clip.y &&
+         y < clip.y + clip.height;
+}
+
+void OpenGLCanvas::intersectWithClip(int& x, int& y, int& width,
+                                    int& height) const {
+  if (clipStack_.empty())
+    return;
+  const auto& clip = clipStack_.back();
+  int newX = std::max(x, clip.x);
+  int newY = std::max(y, clip.y);
+  int newRight = std::min(x + width, clip.x + clip.width);
+  int newBottom = std::min(y + height, clip.y + clip.height);
+  if (newRight <= newX || newBottom <= newY) {
+    width = 0;
+    height = 0;
+    return;
+  }
+  x = newX;
+  y = newY;
+  width = newRight - newX;
+  height = newBottom - newY;
+}
+
+void OpenGLCanvas::pushClipRect(int x, int y, int width, int height) {
+  if (clipStack_.empty()) {
+    clipStack_.push_back({x, y, width, height});
+    return;
+  }
+  const auto& current = clipStack_.back();
+  int newX = std::max(x, current.x);
+  int newY = std::max(y, current.y);
+  int newRight = std::min(x + width, current.x + current.width);
+  int newBottom = std::min(y + height, current.y + current.height);
+  if (newRight <= newX || newBottom <= newY) {
+    clipStack_.push_back({0, 0, 0, 0});
+    return;
+  }
+  clipStack_.push_back({newX, newY, newRight - newX, newBottom - newY});
+}
+
+void OpenGLCanvas::popClipRect() {
+  if (clipStack_.size() > 1) {
+    clipStack_.pop_back();
+  }
 }
 
 OpenGLCanvas::~OpenGLCanvas() {
@@ -177,6 +231,10 @@ void OpenGLCanvas::fillRect(int x, int y, int width, int height, Color color) {
   // 1. Bind framebuffer
   // 2. Use OpenGL to draw a rectangle
   // 3. For now, we'll use immediate mode for simplicity
+  int cx = x, cy = y, cw = width, ch = height;
+  intersectWithClip(cx, cy, cw, ch);
+  if (cw <= 0 || ch <= 0)
+    return;
 
   glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
 
@@ -198,10 +256,10 @@ void OpenGLCanvas::fillRect(int x, int y, int width, int height, Color color) {
 
   // Draw rectangle
   glBegin(GL_QUADS);
-  glVertex2f(x, y);
-  glVertex2f(x + width, y);
-  glVertex2f(x + width, y + height);
-  glVertex2f(x, y + height);
+  glVertex2f(cx, cy);
+  glVertex2f(cx + cw, cy);
+  glVertex2f(cx + cw, cy + ch);
+  glVertex2f(cx, cy + ch);
   glEnd();
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -338,10 +396,9 @@ void OpenGLCanvas::unbindTexture() {
 
 void OpenGLCanvas::updateTexture(const void *data) {
 #ifdef ENABLE_OPENGL
+  (void)data; // Texture update logic handled by bindAndUpdateTexture
   if (texture_) {
     glBindTexture(GL_TEXTURE_2D, texture_);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, GL_RGBA,
-                    GL_UNSIGNED_BYTE, data);
     glBindTexture(GL_TEXTURE_2D, 0);
   }
 #endif
@@ -351,6 +408,8 @@ void OpenGLCanvas::updateTexture(const void *data) {
 void OpenGLCanvas::setPixel(int x, int y, Color color) {
   if (x < 0 || x >= width_ || y < 0 || y >= height_)
     return;
+  if (!isInClip(x, y))
+    return;
 
   uint32_t val = (color.a << 24) | (color.r << 16) | (color.g << 8) | color.b;
   fallbackBuffer_[y * width_ + x] = val;
@@ -358,6 +417,8 @@ void OpenGLCanvas::setPixel(int x, int y, Color color) {
 
 void OpenGLCanvas::blendPixel(int x, int y, Color color) {
   if (x < 0 || x >= width_ || y < 0 || y >= height_)
+    return;
+  if (!isInClip(x, y))
     return;
 
   if (color.a == 0)
@@ -387,8 +448,13 @@ void OpenGLCanvas::blendPixel(int x, int y, Color color) {
 
 void OpenGLCanvas::fillRectSoftware(int x, int y, int width, int height,
                                     Color color) {
-  for (int j = y; j < y + height; ++j) {
-    for (int i = x; i < x + width; ++i) {
+  int cx = x, cy = y, cw = width, ch = height;
+  intersectWithClip(cx, cy, cw, ch);
+  if (cw <= 0 || ch <= 0)
+    return;
+
+  for (int j = cy; j < cy + ch; ++j) {
+    for (int i = cx; i < cx + cw; ++i) {
       setPixel(i, j, color);
     }
   }

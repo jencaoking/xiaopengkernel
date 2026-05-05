@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CSS Grid Layout Demo</title>
+<style>
+  body {
+    margin: 10px;
+    padding: 10px;
+    font-family: sans-serif;
+    background-color: #f0f0f0;
+  }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 10px;
+    color: #333;
+  }
+  h2 {
+    font-size: 18px;
+    margin-top: 20px;
+    margin-bottom: 8px;
+    color: #555;
+  }
+
+  /* Demo 1: Basic 3-column grid */
+  .grid-basic {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 80px 80px;
+    gap: 10px;
+    width: 500px;
+    height: 200px;
+    background-color: #ddd;
+    padding: 10px;
+  }
+  .grid-basic .item {
+    background-color: #4a90d9;
+    border: 2px solid #2c5f8a;
+    padding: 8px;
+    color: white;
+  }
+
+  /* Demo 2: Mixed units */
+  .grid-mixed {
+    display: grid;
+    grid-template-columns: 100px 2fr 1fr;
+    grid-template-rows: 60px 60px;
+    gap: 8px;
+    width: 500px;
+    background-color: #ddd;
+    padding: 10px;
+    margin-top: 10px;
+  }
+  .grid-mixed .item {
+    background-color: #e67e22;
+    border: 2px solid #a85c14;
+    padding: 8px;
+    color: white;
+  }
+
+  /* Demo 3: Spanning items */
+  .grid-span {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 60px 60px;
+    gap: 8px;
+    width: 500px;
+    background-color: #ddd;
+    padding: 10px;
+    margin-top: 10px;
+  }
+  .grid-span .header {
+    grid-column: 1 / 4;
+    background-color: #2ecc71;
+    border: 2px solid #1a8a4a;
+    padding: 8px;
+    color: white;
+  }
+  .grid-span .sidebar {
+    grid-row: 1 / 3;
+    background-color: #9b59b6;
+    border: 2px solid #6c3483;
+    padding: 8px;
+    color: white;
+  }
+  .grid-span .content {
+    background-color: #e74c3c;
+    border: 2px solid #a93226;
+    padding: 8px;
+    color: white;
+  }
+
+  /* Demo 4: Holy Grail Layout */
+  .grid-holy {
+    display: grid;
+    grid-template-columns: 150px 1fr 150px;
+    grid-template-rows: 50px 1fr 40px;
+    gap: 5px;
+    width: 600px;
+    height: 300px;
+    background-color: #ddd;
+    padding: 10px;
+    margin-top: 10px;
+  }
+  .grid-holy .header {
+    grid-column: 1 / 4;
+    background-color: #34495e;
+    padding: 8px;
+    color: white;
+  }
+  .grid-holy .left {
+    background-color: #1abc9c;
+    padding: 8px;
+    color: white;
+  }
+  .grid-holy .center {
+    background-color: #ecf0f1;
+    padding: 8px;
+    color: #333;
+  }
+  .grid-holy .right {
+    background-color: #1abc9c;
+    padding: 8px;
+    color: white;
+  }
+  .grid-holy .footer {
+    grid-column: 1 / 4;
+    background-color: #34495e;
+    padding: 8px;
+    color: white;
+  }
+</style>
+</head>
+<body>
+  <h1>CSS Grid Layout Demo</h1>
+
+  <h2>1. Basic 3x2 Grid</h2>
+  <div class="grid-basic">
+    <div class="item">1</div>
+    <div class="item">2</div>
+    <div class="item">3</div>
+    <div class="item">4</div>
+    <div class="item">5</div>
+    <div class="item">6</div>
+  </div>
+
+  <h2>2. Mixed Units (px + fr)</h2>
+  <div class="grid-mixed">
+    <div class="item">100px</div>
+    <div class="item">2fr</div>
+    <div class="item">1fr</div>
+    <div class="item">100px</div>
+    <div class="item">2fr</div>
+    <div class="item">1fr</div>
+  </div>
+
+  <h2>3. Spanning Items</h2>
+  <div class="grid-span">
+    <div class="header">Header (spans 3 cols)</div>
+    <div class="sidebar">Side (spans 2 rows)</div>
+    <div class="content">Content 1</div>
+    <div class="content">Content 2</div>
+  </div>
+
+  <h2>4. Holy Grail Layout</h2>
+  <div class="grid-holy">
+    <div class="header">Header</div>
+    <div class="left">Left Nav</div>
+    <div class="center">Main Content Area</div>
+    <div class="right">Right Aside</div>
+    <div class="footer">Footer</div>
+  </div>
+</body>
+</html>
