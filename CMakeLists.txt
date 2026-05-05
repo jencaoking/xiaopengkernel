@@ -905,6 +905,36 @@ set_target_properties(test_web_api PROPERTIES
 )
 add_test(NAME WebAPITests COMMAND test_web_api)
 
+# Test WebSocket
+add_executable(test_websocket tests/test_websocket.cpp src/network/websocket.cpp)
+target_include_directories(test_websocket PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_websocket PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_websocket PRIVATE ${CURL_LIBRARY} ssl crypto)
+endif()
+target_compile_definitions(test_websocket PRIVATE CURL_STATICLIB)
+set_target_properties(test_websocket PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME WebSocketTests COMMAND test_websocket)
+
 add_custom_target(run
     COMMAND ${PROJECT_NAME}
     DEPENDS ${PROJECT_NAME}
