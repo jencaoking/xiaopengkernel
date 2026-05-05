@@ -48,9 +48,13 @@ else()
     endif()
 endif()
 
-# QuickJS Configuration
+# QuickJS Configuration (2025-09-13)
 set(QUICKJS_ROOT "${CMAKE_SOURCE_DIR}/third_party/quickjs")
 if(EXISTS "${QUICKJS_ROOT}/quickjs.c")
+    # Read QuickJS version
+    file(READ "${QUICKJS_ROOT}/VERSION" QUICKJS_VERSION)
+    string(STRIP "${QUICKJS_VERSION}" QUICKJS_VERSION)
+
     set(QUICKJS_SOURCES
         "${QUICKJS_ROOT}/quickjs.c"
         "${QUICKJS_ROOT}/libregexp.c"
@@ -59,25 +63,41 @@ if(EXISTS "${QUICKJS_ROOT}/quickjs.c")
         "${QUICKJS_ROOT}/quickjs-libc.c"
         "${QUICKJS_ROOT}/dtoa.c"
     )
-    
-    # QuickJS is C, so we need to ensure C compiler is available but project handles C/CXX.
-    # It often requires specific defines.
+
     add_library(quickjs STATIC ${QUICKJS_SOURCES})
     target_include_directories(quickjs PUBLIC "${QUICKJS_ROOT}")
-    target_compile_definitions(quickjs PRIVATE 
-        CONFIG_VERSION="2021-03-27"
-        _GNU_SOURCE 
+
+    # QuickJS configuration
+    target_compile_definitions(quickjs PRIVATE
+        CONFIG_VERSION="${QUICKJS_VERSION}"
+        _GNU_SOURCE
+        CONFIG_BIGNUM
+        CONFIG_ATOMICS
     )
+
+    # Optional features
+    option(QUICKJS_ENABLE_DEBUG "Enable QuickJS debugging" OFF)
+    if(QUICKJS_ENABLE_DEBUG)
+        target_compile_definitions(quickjs PRIVATE DUMP_LEAKS)
+    endif()
+
     set_target_properties(quickjs PROPERTIES LINKER_LANGUAGE C)
+
     # Suppress warnings for third-party C code
     if(MSVC)
         target_compile_options(quickjs PRIVATE /w)
     else()
         target_compile_options(quickjs PRIVATE -w)
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            target_compile_options(quickjs PRIVATE -O0 -g3)
+        else()
+            target_compile_options(quickjs PRIVATE -O3 -flto)
+            target_link_options(quickjs PUBLIC -flto)
+        endif()
     endif()
 
     add_compile_definitions(ENABLE_QUICKJS)
-    message(STATUS "QuickJS found at ${QUICKJS_ROOT}")
+    message(STATUS "QuickJS v${QUICKJS_VERSION} found at ${QUICKJS_ROOT}")
 else()
     message(WARNING "QuickJS not found at ${QUICKJS_ROOT}. Scripting will be disabled.")
 endif()
@@ -124,6 +144,7 @@ file(GLOB_RECURSE ALL_SOURCES "src/*.cpp")
 list(FILTER ALL_SOURCES EXCLUDE REGEX "simple_opengl_demo\\.cpp$")
 list(FILTER ALL_SOURCES EXCLUDE REGEX "demo_minimal_main\\.cpp$")
 list(FILTER ALL_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+list(FILTER ALL_SOURCES EXCLUDE REGEX "promise_binding\\.cpp$")
 
 # Create an OBJECT library for the core framework to be reused by multiple targets
 add_library(xiaopengkernel_core OBJECT ${ALL_SOURCES})
@@ -994,6 +1015,39 @@ set_target_properties(test_canvas_2d PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
 add_test(NAME Canvas2DTests COMMAND test_canvas_2d)
+
+# Test QuickJS Upgrade
+if(TARGET quickjs)
+add_executable(test_quickjs_upgrade tests/test_quickjs_upgrade.cpp)
+target_include_directories(test_quickjs_upgrade PRIVATE ${CMAKE_SOURCE_DIR}/include "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_quickjs_upgrade PRIVATE ENABLE_QUICKJS CURL_STATICLIB)
+target_link_libraries(test_quickjs_upgrade PRIVATE xiaopengkernel_core quickjs)
+if(MINGW_BUILD)
+target_link_libraries(test_quickjs_upgrade PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_quickjs_upgrade PRIVATE ${CURL_LIBRARY} ssl crypto)
+endif()
+set_target_properties(test_quickjs_upgrade PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME QuickJSUpgradeTests COMMAND test_quickjs_upgrade)
+endif()
 
 add_custom_target(run
     COMMAND ${PROJECT_NAME}
