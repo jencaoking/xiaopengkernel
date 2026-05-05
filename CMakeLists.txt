@@ -845,6 +845,36 @@ set_target_properties(test_event_loop PROPERTIES
 )
 add_test(NAME EventLoopTests COMMAND test_event_loop)
 
+# Test Page Lifecycle
+add_executable(test_page_lifecycle tests/test_page_lifecycle.cpp src/engine/event_loop.cpp src/engine/browsing_context.cpp src/engine/page_lifecycle.cpp src/script/promise_binding_simple.cpp)
+target_include_directories(test_page_lifecycle PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_page_lifecycle PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_page_lifecycle PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_page_lifecycle PRIVATE CURL_STATICLIB)
+set_target_properties(test_page_lifecycle PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME PageLifecycleTests COMMAND test_page_lifecycle)
+
 add_custom_target(run
     COMMAND ${PROJECT_NAME}
     DEPENDS ${PROJECT_NAME}
