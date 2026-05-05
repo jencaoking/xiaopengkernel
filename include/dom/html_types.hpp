@@ -415,6 +415,32 @@ public:
   // Event listener IDs (the actual JS callbacks are stored in EventBinding)
   // Map: eventType -> list of listener IDs
   std::unordered_map<std::string, std::vector<uint32_t>> eventListenerIds_;
+
+  // Add an event listener
+  void addEventListener(const std::string &type, uint32_t listenerId) {
+    eventListenerIds_[type].push_back(listenerId);
+  }
+
+  // Remove an event listener
+  void removeEventListener(const std::string &type, uint32_t listenerId) {
+    auto it = eventListenerIds_.find(type);
+    if (it != eventListenerIds_.end()) {
+      auto &ids = it->second;
+      ids.erase(std::remove(ids.begin(), ids.end(), listenerId), ids.end());
+      if (ids.empty()) {
+        eventListenerIds_.erase(it);
+      }
+    }
+  }
+
+  // Get listeners for an event
+  const std::vector<uint32_t> *getEventListeners(const std::string &type) const {
+    auto it = eventListenerIds_.find(type);
+    if (it != eventListenerIds_.end()) {
+      return &it->second;
+    }
+    return nullptr;
+  }
 };
 
 class TextNode : public Node {
