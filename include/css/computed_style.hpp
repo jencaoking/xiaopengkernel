@@ -139,7 +139,9 @@ struct TrackSize {
     Auto,
     Px,
     Percent,
-    Fr
+    Fr,
+    MinContent,
+    MaxContent
   };
   Type type = Type::Auto;
   float value = 0.0f;

@@ -188,6 +188,8 @@ private:
           style.display = Display::Flex;
         else if (decl.value == "inline-block")
           style.display = Display::InlineBlock;
+        else if (decl.value == "grid")
+          style.display = Display::Grid;
       } else if (decl.property == "width") {
         style.width = parseLength(decl.value);
       } else if (decl.property == "height") {
@@ -384,6 +386,128 @@ private:
         try {
           style.zIndex = std::stoi(decl.value);
         } catch (...) {}
+      } else if (decl.property == "position") {
+        if (decl.value == "static")
+          style.position = Position::Static;
+        else if (decl.value == "relative")
+          style.position = Position::Relative;
+        else if (decl.value == "absolute")
+          style.position = Position::Absolute;
+        else if (decl.value == "fixed")
+          style.position = Position::Fixed;
+        else if (decl.value == "sticky")
+          style.position = Position::Sticky;
+      }
+      // --- Grid Layout Properties ---
+      else if (decl.property == "grid-template-columns") {
+        style.gridTemplateColumns = parseTrackSizeList(decl.value);
+      } else if (decl.property == "grid-template-rows") {
+        style.gridTemplateRows = parseTrackSizeList(decl.value);
+      } else if (decl.property == "grid-auto-columns") {
+        style.gridAutoColumns = parseTrackSizeList(decl.value);
+      } else if (decl.property == "grid-auto-rows") {
+        style.gridAutoRows = parseTrackSizeList(decl.value);
+      } else if (decl.property == "grid-column-gap" || decl.property == "column-gap") {
+        style.gridColumnGap = parseLength(decl.value);
+      } else if (decl.property == "grid-row-gap" || decl.property == "row-gap") {
+        style.gridRowGap = parseLength(decl.value);
+      } else if (decl.property == "gap") {
+        auto l = parseLength(decl.value);
+        style.gridColumnGap = l;
+        style.gridRowGap = l;
+      } else if (decl.property == "grid-auto-flow") {
+        if (decl.value == "column")
+          style.gridAutoFlow = GridAutoFlow::Column;
+        else if (decl.value == "row")
+          style.gridAutoFlow = GridAutoFlow::Row;
+        else if (decl.value == "dense")
+          style.gridAutoFlow = GridAutoFlow::RowDense;
+        else if (decl.value == "column dense")
+          style.gridAutoFlow = GridAutoFlow::ColumnDense;
+      } else if (decl.property == "justify-items") {
+        if (decl.value == "start")
+          style.gridJustifyItems = GridJustifyItems::Start;
+        else if (decl.value == "end")
+          style.gridJustifyItems = GridJustifyItems::End;
+        else if (decl.value == "center")
+          style.gridJustifyItems = GridJustifyItems::Center;
+        else if (decl.value == "stretch")
+          style.gridJustifyItems = GridJustifyItems::Stretch;
+      } else if (decl.property == "align-items") {
+        // Shared between flexbox and grid
+        if (decl.value == "stretch")
+          style.alignItems = AlignItems::Stretch;
+        else if (decl.value == "flex-start" || decl.value == "start")
+          style.alignItems = AlignItems::FlexStart;
+        else if (decl.value == "flex-end" || decl.value == "end")
+          style.alignItems = AlignItems::FlexEnd;
+        else if (decl.value == "center")
+          style.alignItems = AlignItems::Center;
+        else if (decl.value == "baseline")
+          style.alignItems = AlignItems::Baseline;
+      } else if (decl.property == "justify-content") {
+        // Shared between flexbox and grid
+        if (decl.value == "flex-start" || decl.value == "start")
+          style.justifyContent = JustifyContent::FlexStart;
+        else if (decl.value == "flex-end" || decl.value == "end")
+          style.justifyContent = JustifyContent::FlexEnd;
+        else if (decl.value == "center")
+          style.justifyContent = JustifyContent::Center;
+        else if (decl.value == "space-between")
+          style.justifyContent = JustifyContent::SpaceBetween;
+        else if (decl.value == "space-around")
+          style.justifyContent = JustifyContent::SpaceAround;
+        else if (decl.value == "space-evenly")
+          style.justifyContent = JustifyContent::SpaceEvenly;
+      } else if (decl.property == "align-content") {
+        if (decl.value == "start")
+          style.gridAlignContent = GridAlignContent::Start;
+        else if (decl.value == "end")
+          style.gridAlignContent = GridAlignContent::End;
+        else if (decl.value == "center")
+          style.gridAlignContent = GridAlignContent::Center;
+        else if (decl.value == "stretch")
+          style.gridAlignContent = GridAlignContent::Stretch;
+        else if (decl.value == "space-between")
+          style.gridAlignContent = GridAlignContent::SpaceBetween;
+        else if (decl.value == "space-around")
+          style.gridAlignContent = GridAlignContent::SpaceAround;
+      }
+      // --- Grid Item Properties ---
+      else if (decl.property == "grid-column-start") {
+        style.gridColumnStart = parseGridLine(decl.value);
+      } else if (decl.property == "grid-column-end") {
+        style.gridColumnEnd = parseGridLine(decl.value);
+      } else if (decl.property == "grid-row-start") {
+        style.gridRowStart = parseGridLine(decl.value);
+      } else if (decl.property == "grid-row-end") {
+        style.gridRowEnd = parseGridLine(decl.value);
+      } else if (decl.property == "grid-column") {
+        parseGridShorthand(decl.value, style.gridColumnStart, style.gridColumnEnd);
+      } else if (decl.property == "grid-row") {
+        parseGridShorthand(decl.value, style.gridRowStart, style.gridRowEnd);
+      } else if (decl.property == "justify-self") {
+        if (decl.value == "start")
+          style.gridJustifySelf = GridJustifySelf::Start;
+        else if (decl.value == "end")
+          style.gridJustifySelf = GridJustifySelf::End;
+        else if (decl.value == "center")
+          style.gridJustifySelf = GridJustifySelf::Center;
+        else if (decl.value == "stretch")
+          style.gridJustifySelf = GridJustifySelf::Stretch;
+        else if (decl.value == "auto")
+          style.gridJustifySelf = GridJustifySelf::Auto;
+      } else if (decl.property == "align-self") {
+        if (decl.value == "auto")
+          style.gridAlignSelf = GridAlignSelf::Auto;
+        else if (decl.value == "start")
+          style.gridAlignSelf = GridAlignSelf::Start;
+        else if (decl.value == "end")
+          style.gridAlignSelf = GridAlignSelf::End;
+        else if (decl.value == "center")
+          style.gridAlignSelf = GridAlignSelf::Center;
+        else if (decl.value == "stretch")
+          style.gridAlignSelf = GridAlignSelf::Stretch;
       }
 
       style.otherProperties[decl.property] = decl.value;
@@ -711,6 +835,91 @@ private:
     if (c >= 'A' && c <= 'F')
       return c - 'A' + 10;
     return 0;
+  }
+
+  // Parse a space-separated list of track sizes, e.g. "1fr 2fr 100px 50%"
+  std::vector<TrackSize> parseTrackSizeList(const std::string &val) {
+    std::vector<TrackSize> result;
+    std::stringstream ss(val);
+    std::string token;
+    while (ss >> token) {
+      TrackSize ts;
+      if (token.find("fr") != std::string::npos) {
+        ts.type = TrackSize::Type::Fr;
+        try {
+          ts.value = std::stof(token);
+        } catch (...) {
+          ts.value = 1.0f;
+        }
+      } else if (token.find('%') != std::string::npos) {
+        ts.type = TrackSize::Type::Percent;
+        try {
+          ts.value = std::stof(token);
+        } catch (...) {
+          ts.value = 0.0f;
+        }
+      } else if (token == "auto") {
+        ts.type = TrackSize::Type::Auto;
+        ts.value = 0.0f;
+      } else if (token == "min-content") {
+        ts.type = TrackSize::Type::MinContent;
+        ts.value = 0.0f;
+      } else if (token == "max-content") {
+        ts.type = TrackSize::Type::MaxContent;
+        ts.value = 0.0f;
+      } else {
+        // Default: treat as px
+        ts.type = TrackSize::Type::Px;
+        try {
+          ts.value = std::stof(token);
+        } catch (...) {
+          ts.value = 0.0f;
+        }
+      }
+      result.push_back(ts);
+    }
+    return result;
+  }
+
+  // Parse a grid line number, e.g. "1", "2", "span 2"
+  int parseGridLine(const std::string &val) {
+    // Trim whitespace
+    std::string v = val;
+    size_t first = v.find_first_not_of(" \t\r\n");
+    if (first != std::string::npos) v.erase(0, first);
+    size_t last = v.find_last_not_of(" \t\r\n");
+    if (last != std::string::npos) v.erase(last + 1);
+
+    // Handle "span N"
+    if (v.substr(0, 4) == "span") {
+      std::string numStr = v.substr(4);
+      try {
+        return -std::stoi(numStr); // Negative = span
+      } catch (...) {
+        return -1;
+      }
+    }
+
+    try {
+      return std::stoi(v);
+    } catch (...) {
+      return 1;
+    }
+  }
+
+  // Parse grid shorthand like "1 / 3" or "1 / span 2"
+  void parseGridShorthand(const std::string &val, int &start, int &end) {
+    size_t slashPos = val.find('/');
+    if (slashPos != std::string::npos) {
+      std::string startStr = val.substr(0, slashPos);
+      std::string endStr = val.substr(slashPos + 1);
+      start = parseGridLine(startStr);
+      end = parseGridLine(endStr);
+    } else {
+      // Single value: set start, auto end
+      start = parseGridLine(val);
+      // end remains default (start + 1)
+    }
   }
 };
 

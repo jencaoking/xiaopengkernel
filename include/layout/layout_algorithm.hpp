@@ -3,6 +3,7 @@
 #include "layout_box.hpp"
 #include "renderer/text_metrics.hpp"
 #include "flexbox_algorithm.hpp"
+#include "grid_algorithm.hpp"
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -38,14 +39,18 @@ private:
       if (box->style().display == css::Display::Flex) {
         FlexboxAlgorithm flexbox;
         flexbox.layoutFlexContainer(box, parentDim);
+      } else if (box->style().display == css::Display::Grid) {
+        GridAlgorithm grid;
+        grid.layoutGridContainer(box, parentDim);
       } else if (isInlineFormattingContext(box)) {
         layoutInline(box);
       } else {
         layoutBlock(box);
       }
       
-      // Calculate height for non-flex containers
-      if (box->style().display != css::Display::Flex) {
+      // Calculate height for non-flex and non-grid containers
+      if (box->style().display != css::Display::Flex &&
+          box->style().display != css::Display::Grid) {
         calculateBlockHeight(box);
       }
       return;
@@ -63,6 +68,10 @@ private:
         // Use Flexbox layout algorithm
         FlexboxAlgorithm flexbox;
         flexbox.layoutFlexContainer(box, parentDim);
+      } else if (box->style().display == css::Display::Grid) {
+        // Use Grid layout algorithm
+        GridAlgorithm grid;
+        grid.layoutGridContainer(box, parentDim);
       } else if (isInlineFormattingContext(box)) {
         layoutInline(box);
       } else {
@@ -83,8 +92,9 @@ private:
       // Inline nodes are typically handled by their parent's IFC.
     }
 
-    // 3. Calculate Height (for non-flex containers)
-    if (box->style().display != css::Display::Flex) {
+    // 3. Calculate Height (for non-flex and non-grid containers)
+    if (box->style().display != css::Display::Flex &&
+        box->style().display != css::Display::Grid) {
       calculateBlockHeight(box);
     }
   }
