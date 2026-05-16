@@ -50,25 +50,37 @@ Color LinearGradient::getColorAt(float t) const {
 }
 
 Color LinearGradient::parseColor(const std::string &colorStr) const {
-  if (colorStr.substr(0, 1) == "#") {
+  if (colorStr.empty()) {
+    return Color(0, 0, 0);
+  }
+  
+  if (colorStr[0] == '#') {
     std::string hex = colorStr.substr(1);
     if (hex.length() == 6) {
-      return Color(
-          static_cast<uint8_t>(std::stoi(hex.substr(0, 2), nullptr, 16)),
-          static_cast<uint8_t>(std::stoi(hex.substr(2, 2), nullptr, 16)),
-          static_cast<uint8_t>(std::stoi(hex.substr(4, 2), nullptr, 16))
-      );
+      try {
+        return Color(
+            static_cast<uint8_t>(std::stoi(hex.substr(0, 2), nullptr, 16)),
+            static_cast<uint8_t>(std::stoi(hex.substr(2, 2), nullptr, 16)),
+            static_cast<uint8_t>(std::stoi(hex.substr(4, 2), nullptr, 16))
+        );
+      } catch (...) {
+        // Invalid hex
+      }
     }
   }
   
-  std::regex rgbPattern(R"(rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\))");
-  std::smatch match;
-  if (std::regex_search(colorStr, match, rgbPattern)) {
-    uint8_t r = static_cast<uint8_t>(std::stoi(match[1].str()));
-    uint8_t g = static_cast<uint8_t>(std::stoi(match[2].str()));
-    uint8_t b = static_cast<uint8_t>(std::stoi(match[3].str()));
-    uint8_t a = match[4].matched ? static_cast<uint8_t>(std::stod(match[4].str()) * 255) : 255;
-    return Color(r, g, b, a);
+  try {
+    std::regex rgbPattern(R"(rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\))");
+    std::smatch match;
+    if (std::regex_search(colorStr, match, rgbPattern)) {
+      uint8_t r = static_cast<uint8_t>(std::stoi(match[1].str()));
+      uint8_t g = static_cast<uint8_t>(std::stoi(match[2].str()));
+      uint8_t b = static_cast<uint8_t>(std::stoi(match[3].str()));
+      uint8_t a = match[4].matched ? static_cast<uint8_t>(std::stod(match[4].str()) * 255) : 255;
+      return Color(r, g, b, a);
+    }
+  } catch (...) {
+    // Invalid regex or conversion
   }
   
   return Color(0, 0, 0);
@@ -106,25 +118,37 @@ Color RadialGradient::getColorAt(float t) const {
 }
 
 Color RadialGradient::parseColor(const std::string &colorStr) const {
-  if (colorStr.substr(0, 1) == "#") {
+  if (colorStr.empty()) {
+    return Color(0, 0, 0);
+  }
+  
+  if (colorStr[0] == '#') {
     std::string hex = colorStr.substr(1);
     if (hex.length() == 6) {
-      return Color(
-          static_cast<uint8_t>(std::stoi(hex.substr(0, 2), nullptr, 16)),
-          static_cast<uint8_t>(std::stoi(hex.substr(2, 2), nullptr, 16)),
-          static_cast<uint8_t>(std::stoi(hex.substr(4, 2), nullptr, 16))
-      );
+      try {
+        return Color(
+            static_cast<uint8_t>(std::stoi(hex.substr(0, 2), nullptr, 16)),
+            static_cast<uint8_t>(std::stoi(hex.substr(2, 2), nullptr, 16)),
+            static_cast<uint8_t>(std::stoi(hex.substr(4, 2), nullptr, 16))
+        );
+      } catch (...) {
+        // Invalid hex
+      }
     }
   }
   
-  std::regex rgbPattern(R"(rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\))");
-  std::smatch match;
-  if (std::regex_search(colorStr, match, rgbPattern)) {
-    uint8_t r = static_cast<uint8_t>(std::stoi(match[1].str()));
-    uint8_t g = static_cast<uint8_t>(std::stoi(match[2].str()));
-    uint8_t b = static_cast<uint8_t>(std::stoi(match[3].str()));
-    uint8_t a = match[4].matched ? static_cast<uint8_t>(std::stod(match[4].str()) * 255) : 255;
-    return Color(r, g, b, a);
+  try {
+    std::regex rgbPattern(R"(rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\))");
+    std::smatch match;
+    if (std::regex_search(colorStr, match, rgbPattern)) {
+      uint8_t r = static_cast<uint8_t>(std::stoi(match[1].str()));
+      uint8_t g = static_cast<uint8_t>(std::stoi(match[2].str()));
+      uint8_t b = static_cast<uint8_t>(std::stoi(match[3].str()));
+      uint8_t a = match[4].matched ? static_cast<uint8_t>(std::stod(match[4].str()) * 255) : 255;
+      return Color(r, g, b, a);
+    }
+  } catch (...) {
+    // Invalid regex or conversion
   }
   
   return Color(0, 0, 0);
@@ -229,25 +253,37 @@ void Canvas2D::setGlobalCompositeOperation(const std::string &operation) {
 }
 
 Color Canvas2D::parseColor(const std::string &colorStr) {
-  if (colorStr.substr(0, 1) == "#") {
+  if (colorStr.empty()) {
+    return Color(0, 0, 0);
+  }
+  
+  if (colorStr[0] == '#') {
     std::string hex = colorStr.substr(1);
     if (hex.length() == 6) {
-      return Color(
-          static_cast<uint8_t>(std::stoi(hex.substr(0, 2), nullptr, 16)),
-          static_cast<uint8_t>(std::stoi(hex.substr(2, 2), nullptr, 16)),
-          static_cast<uint8_t>(std::stoi(hex.substr(4, 2), nullptr, 16))
-      );
+      try {
+        return Color(
+            static_cast<uint8_t>(std::stoi(hex.substr(0, 2), nullptr, 16)),
+            static_cast<uint8_t>(std::stoi(hex.substr(2, 2), nullptr, 16)),
+            static_cast<uint8_t>(std::stoi(hex.substr(4, 2), nullptr, 16))
+        );
+      } catch (...) {
+        // Invalid hex
+      }
     }
   }
   
-  std::regex rgbPattern(R"(rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\))");
-  std::smatch match;
-  if (std::regex_search(colorStr, match, rgbPattern)) {
-    uint8_t r = static_cast<uint8_t>(std::stoi(match[1].str()));
-    uint8_t g = static_cast<uint8_t>(std::stoi(match[2].str()));
-    uint8_t b = static_cast<uint8_t>(std::stoi(match[3].str()));
-    uint8_t a = match[4].matched ? static_cast<uint8_t>(std::stod(match[4].str()) * 255) : 255;
-    return Color(r, g, b, a);
+  try {
+    std::regex rgbPattern(R"(rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\))");
+    std::smatch match;
+    if (std::regex_search(colorStr, match, rgbPattern)) {
+      uint8_t r = static_cast<uint8_t>(std::stoi(match[1].str()));
+      uint8_t g = static_cast<uint8_t>(std::stoi(match[2].str()));
+      uint8_t b = static_cast<uint8_t>(std::stoi(match[3].str()));
+      uint8_t a = match[4].matched ? static_cast<uint8_t>(std::stod(match[4].str()) * 255) : 255;
+      return Color(r, g, b, a);
+    }
+  } catch (...) {
+    // Invalid regex or conversion
   }
   
   return Color(0, 0, 0);
