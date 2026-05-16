@@ -22,9 +22,9 @@ public:
 
     while (position_ < length_) {
       Token token = consumeToken();
-      if (token.type != TokenType::Whitespace) {
-        tokens.push_back(std::move(token));
-      }
+      // FIX: 保留所有 token，包括空白，以便解析器能检测后代组合子
+      // 原代码: if (token.type != TokenType::Whitespace)
+      tokens.push_back(std::move(token));
     }
     tokens.emplace_back(TokenType::EndOfFile);
     return tokens;

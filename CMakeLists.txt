@@ -48,9 +48,13 @@ else()
     endif()
 endif()
 
-# QuickJS Configuration
+# QuickJS Configuration (2025-09-13)
 set(QUICKJS_ROOT "${CMAKE_SOURCE_DIR}/third_party/quickjs")
 if(EXISTS "${QUICKJS_ROOT}/quickjs.c")
+    # Read QuickJS version
+    file(READ "${QUICKJS_ROOT}/VERSION" QUICKJS_VERSION)
+    string(STRIP "${QUICKJS_VERSION}" QUICKJS_VERSION)
+
     set(QUICKJS_SOURCES
         "${QUICKJS_ROOT}/quickjs.c"
         "${QUICKJS_ROOT}/libregexp.c"
@@ -59,25 +63,41 @@ if(EXISTS "${QUICKJS_ROOT}/quickjs.c")
         "${QUICKJS_ROOT}/quickjs-libc.c"
         "${QUICKJS_ROOT}/dtoa.c"
     )
-    
-    # QuickJS is C, so we need to ensure C compiler is available but project handles C/CXX.
-    # It often requires specific defines.
+
     add_library(quickjs STATIC ${QUICKJS_SOURCES})
     target_include_directories(quickjs PUBLIC "${QUICKJS_ROOT}")
-    target_compile_definitions(quickjs PRIVATE 
-        CONFIG_VERSION="2021-03-27"
-        _GNU_SOURCE 
+
+    # QuickJS configuration
+    target_compile_definitions(quickjs PRIVATE
+        CONFIG_VERSION="${QUICKJS_VERSION}"
+        _GNU_SOURCE
+        CONFIG_BIGNUM
+        CONFIG_ATOMICS
     )
+
+    # Optional features
+    option(QUICKJS_ENABLE_DEBUG "Enable QuickJS debugging" OFF)
+    if(QUICKJS_ENABLE_DEBUG)
+        target_compile_definitions(quickjs PRIVATE DUMP_LEAKS)
+    endif()
+
     set_target_properties(quickjs PROPERTIES LINKER_LANGUAGE C)
+
     # Suppress warnings for third-party C code
     if(MSVC)
         target_compile_options(quickjs PRIVATE /w)
     else()
         target_compile_options(quickjs PRIVATE -w)
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            target_compile_options(quickjs PRIVATE -O0 -g3)
+        else()
+            target_compile_options(quickjs PRIVATE -O3 -flto)
+            target_link_options(quickjs PUBLIC -flto)
+        endif()
     endif()
 
     add_compile_definitions(ENABLE_QUICKJS)
-    message(STATUS "QuickJS found at ${QUICKJS_ROOT}")
+    message(STATUS "QuickJS v${QUICKJS_VERSION} found at ${QUICKJS_ROOT}")
 else()
     message(WARNING "QuickJS not found at ${QUICKJS_ROOT}. Scripting will be disabled.")
 endif()
@@ -229,7 +249,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 else()
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     ${CURL_LIBRARY}
-    curl
     pthread
 )
 endif()
@@ -260,6 +279,9 @@ endif()
 if(ENABLE_FREETYPE)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
 endif()
+
+find_package(OpenSSL REQUIRED)
+target_link_libraries(xiaopengkernel_core PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
 if(OPENGL_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${XPK_OPENGL_LIBRARIES})
@@ -697,11 +719,48 @@ target_link_libraries(test_dom_binding PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_dom_binding PRIVATE CURL_STATICLIB)
 target_link_libraries(test_dom_binding PRIVATE xiaopengkernel_core quickjs)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(test_dom_binding PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 set_target_properties(test_dom_binding PROPERTIES 
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
 add_test(NAME DOMBindingTests COMMAND test_dom_binding)
+
+# Test Advanced CSS Selector Engine
+add_executable(test_advanced_selector tests/test_advanced_selector.cpp)
+target_include_directories(test_advanced_selector PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(test_advanced_selector PRIVATE "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_advanced_selector PRIVATE ENABLE_QUICKJS)
+if(MINGW_BUILD)
+target_link_libraries(test_advanced_selector PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_advanced_selector PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_advanced_selector PRIVATE CURL_STATICLIB)
+target_link_libraries(test_advanced_selector PRIVATE xiaopengkernel_core quickjs)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(test_advanced_selector PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+set_target_properties(test_advanced_selector PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME AdvancedSelectorTests COMMAND test_advanced_selector)
 
 # Test Event System
 add_executable(test_event tests/test_event.cpp)
@@ -886,6 +945,189 @@ set_target_properties(test_page_lifecycle PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
 add_test(NAME PageLifecycleTests COMMAND test_page_lifecycle)
+
+# Test Web API (Fetch + Canvas 2D)
+add_executable(test_web_api tests/test_web_api.cpp src/script/fetch_api.cpp src/gui/canvas_2d.cpp)
+target_include_directories(test_web_api PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_web_api PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_web_api PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_web_api PRIVATE CURL_STATICLIB)
+set_target_properties(test_web_api PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME WebAPITests COMMAND test_web_api)
+
+# Test WebSocket
+add_executable(test_websocket tests/test_websocket.cpp src/network/websocket.cpp)
+target_include_directories(test_websocket PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_websocket PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_websocket PRIVATE ${CURL_LIBRARY} ssl crypto)
+endif()
+target_compile_definitions(test_websocket PRIVATE CURL_STATICLIB)
+set_target_properties(test_websocket PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME WebSocketTests COMMAND test_websocket)
+
+# Test CSS Animation
+add_executable(test_css_animation tests/test_css_animation.cpp src/css/css_animation.cpp)
+target_include_directories(test_css_animation PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_css_animation PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_css_animation PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_css_animation PRIVATE CURL_STATICLIB)
+set_target_properties(test_css_animation PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME CSSAnimationTests COMMAND test_css_animation)
+
+# Test Canvas 2D
+add_executable(test_canvas_2d tests/test_canvas_2d.cpp src/gui/canvas_2d.cpp)
+target_include_directories(test_canvas_2d PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_canvas_2d PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_canvas_2d PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_canvas_2d PRIVATE CURL_STATICLIB)
+set_target_properties(test_canvas_2d PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME Canvas2DTests COMMAND test_canvas_2d)
+
+# Test QuickJS Upgrade
+if(TARGET quickjs)
+add_executable(test_quickjs_upgrade tests/test_quickjs_upgrade.cpp)
+target_include_directories(test_quickjs_upgrade PRIVATE ${CMAKE_SOURCE_DIR}/include "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_quickjs_upgrade PRIVATE ENABLE_QUICKJS CURL_STATICLIB)
+target_link_libraries(test_quickjs_upgrade PRIVATE xiaopengkernel_core quickjs)
+if(MINGW_BUILD)
+target_link_libraries(test_quickjs_upgrade PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_quickjs_upgrade PRIVATE ${CURL_LIBRARY} ssl crypto)
+endif()
+set_target_properties(test_quickjs_upgrade PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME QuickJSUpgradeTests COMMAND test_quickjs_upgrade)
+endif()
+
+# Test CSS Complete (Enhanced CSS parsing and animation)
+add_executable(test_css_complete tests/test_css_complete.cpp)
+target_include_directories(test_css_complete PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_css_complete PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_css_complete PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_css_complete PRIVATE CURL_STATICLIB)
+set_target_properties(test_css_complete PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME CssCompleteTests COMMAND test_css_complete)
 
 add_custom_target(run
     COMMAND ${PROJECT_NAME}

@@ -2,13 +2,20 @@
 
 #include "css_tokenizer.hpp"
 #include "css_types.hpp"
+#include "css_animation.hpp"
 #include <optional>
 #include <string>
 #include <vector>
-
+#include <map>
 
 namespace xiaopeng {
 namespace css {
+
+// Extended StyleSheet that includes animations
+struct ExtendedStyleSheet {
+  std::vector<Rule> rules;
+  std::vector<KeyframesRule> keyframesRules;
+};
 
 class CssParser {
 public:
@@ -19,16 +26,34 @@ public:
 
   StyleSheet parse() {
     StyleSheet sheet;
+    sheet.rules = parseExtended().rules;
+    return sheet;
+  }
+
+  ExtendedStyleSheet parseExtended() {
+    ExtendedStyleSheet sheet;
     while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile)) {
       consumeWhitespace();
       if (peek().is(TokenType::EndOfFile))
         break;
 
-      if (peek().is(TokenType::AtKeyword) || peek().is(TokenType::CDO) ||
-          peek().is(TokenType::CDC)) {
-        // Skip At-rules and CDO/CDC for MVP
-        consumeUntil(TokenType::CloseCurly); // Very naive skipping
-        consumeIgnoreEOF();                  // Consume the }
+      if (peek().is(TokenType::AtKeyword)) {
+        std::string atKeyword = peek().value;
+        consume();
+
+        if (atKeyword == "keyframes" || atKeyword == "-webkit-keyframes") {
+          auto keyframesRule = parseKeyframesRule();
+          if (keyframesRule) {
+            sheet.keyframesRules.push_back(*keyframesRule);
+          }
+          continue;
+        } else {
+          consumeUntil(TokenType::CloseCurly);
+          if (peek().is(TokenType::CloseCurly)) consume();
+          continue;
+        }
+      } else if (peek().is(TokenType::CDO) || peek().is(TokenType::CDC)) {
+        consume();
         continue;
       }
 
@@ -36,12 +61,97 @@ public:
       if (rule) {
         sheet.rules.push_back(*rule);
       } else {
-        // Error recovery: skip until }
         consumeUntil(TokenType::CloseCurly);
         consumeIgnoreEOF();
       }
     }
     return sheet;
+  }
+
+private:
+  // Parse a @keyframes rule using the structure from css_animation.hpp
+  std::optional<KeyframesRule> parseKeyframesRule() {
+    KeyframesRule kfRule;
+
+    consumeWhitespace();
+    if (!peek().is(TokenType::Ident)) {
+      return std::nullopt;
+    }
+    kfRule.name = consume().value;
+
+    consumeWhitespace();
+    if (!peek().is(TokenType::OpenCurly)) {
+      return std::nullopt;
+    }
+    consume();
+
+    while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+           !peek().is(TokenType::CloseCurly)) {
+      consumeWhitespace();
+      if (peek().is(TokenType::CloseCurly)) break;
+
+      KeyframeBlock block;
+
+      bool hasSelector = false;
+      while (position_ < tokens_.size() && !peek().is(TokenType::OpenCurly)) {
+        consumeWhitespace();
+        if (peek().is(TokenType::Percentage)) {
+          double p = peek().numberValue;
+          block.selectors.push_back(KeyframeSelector::fromPercent(p));
+          consume();
+          hasSelector = true;
+        } else if (peek().is(TokenType::Ident) && peek().value == "from") {
+          block.selectors.push_back(KeyframeSelector::fromPercent(0));
+          consume();
+          hasSelector = true;
+        } else if (peek().is(TokenType::Ident) && peek().value == "to") {
+          block.selectors.push_back(KeyframeSelector::fromPercent(100));
+          consume();
+          hasSelector = true;
+        } else if (peek().is(TokenType::Comma)) {
+          consume();
+        } else {
+          break;
+        }
+      }
+
+      if (!hasSelector) {
+        consumeUntil(TokenType::CloseCurly);
+        if (peek().is(TokenType::CloseCurly)) consume();
+        continue;
+      }
+
+      consumeWhitespace();
+      if (!peek().is(TokenType::OpenCurly)) {
+        continue;
+      }
+      consume();
+
+      while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+             !peek().is(TokenType::CloseCurly)) {
+        consumeWhitespace();
+        if (peek().is(TokenType::CloseCurly)) break;
+
+        auto decl = parseDeclaration();
+        if (decl) {
+          block.properties[decl->property] = decl->value;
+        } else {
+          while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+                 !peek().is(TokenType::Semicolon) && !peek().is(TokenType::CloseCurly)) {
+            consume();
+          }
+          if (peek().is(TokenType::Semicolon)) consume();
+        }
+      }
+
+      if (peek().is(TokenType::CloseCurly)) consume();
+
+      kfRule.blocks.push_back(std::move(block));
+    }
+
+    if (peek().is(TokenType::CloseCurly)) consume();
+
+    return kfRule;
   }
 
 private:
@@ -125,8 +235,8 @@ private:
       if (decl) {
         rule.declarations.push_back(*decl);
       } else {
-        while (position_ < tokens_.size() && !peek().is(TokenType::Semicolon) &&
-               !peek().is(TokenType::CloseCurly)) {
+        while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+               !peek().is(TokenType::Semicolon) && !peek().is(TokenType::CloseCurly)) {
           consume();
         }
         if (peek().is(TokenType::Semicolon)) {
@@ -261,7 +371,6 @@ private:
         } else if (t.is(TokenType::Colon)) {
           consume(); // :
           // Pseudo class/element
-          // Simplified interaction
           if (peek().is(TokenType::Colon)) {
             consume();
             part.type = SelectorType::PseudoElement;
@@ -272,20 +381,83 @@ private:
             part.value = consume().value;
             gotPart = true;
           } else if (peek().is(TokenType::Function)) {
-            part.value = consume().value;
-            consumeUntil(
-                TokenType::CloseParen); // Skip function arguments for now
-            consume();
+            // FIX Bug 5: 保留完整的函数调用（包括参数）
+            std::string funcName = consume().value;
+            std::string args;
+            int parenDepth = 1;
+            while (parenDepth > 0 && position_ < tokens_.size() && 
+                   !peek().is(TokenType::EndOfFile)) {
+              Token argTok = consume();
+              if (argTok.is(TokenType::OpenParen)) {
+                args += "(";
+                parenDepth++;
+              } else if (argTok.is(TokenType::CloseParen)) {
+                args += ")";
+                parenDepth--;
+              } else if (!argTok.is(TokenType::Whitespace)) {
+                args += argTok.value;
+              } else {
+                args += " ";
+              }
+            }
+            part.value = funcName + args;
             gotPart = true;
           }
         } else if (t.is(TokenType::OpenSquare)) {
           consume(); // [
           part.type = SelectorType::Attribute;
+          consumeWhitespace();
+          
           if (peek().is(TokenType::Ident)) {
             part.attributeName = consume().value;
-            // Optional operator and value... skipped for brevity
+            consumeWhitespace();
+            
+            // Check for attribute operator
+            if (!peek().is(TokenType::CloseSquare)) {
+              // Parse operator
+              if (peek().is(TokenType::Delim)) {
+                std::string op;
+                if (peek().value == "=") {
+                  op = "=";
+                  consume();
+                } else if (peek().value == "~" || peek().value == "|" || 
+                          peek().value == "^" || peek().value == "$" || 
+                          peek().value == "*") {
+                  op = consume().value;
+                  if (peek().is(TokenType::Delim) && peek().value == "=") {
+                    op += "=";
+                    consume();
+                  }
+                }
+                
+                part.attributeOperator = op;
+                
+                consumeWhitespace();
+                
+                // Parse value
+                if (peek().is(TokenType::Ident) || peek().is(TokenType::String) || 
+                    peek().is(TokenType::Number)) {
+                  if (peek().is(TokenType::String)) {
+                    part.attributeValue = consume().value;
+                  } else {
+                    part.attributeValue = consume().value;
+                  }
+                  
+                  consumeWhitespace();
+                  
+                  // Check for i flag (case insensitive)
+                  if (peek().is(TokenType::Ident) && 
+                      (peek().value == "i" || peek().value == "I")) {
+                    consume();
+                  }
+                }
+              }
+            }
+            
             consumeUntil(TokenType::CloseSquare);
-            consume(); // ]
+            if (peek().is(TokenType::CloseSquare)) {
+              consume(); // ]
+            }
             gotPart = true;
           }
         } else {
@@ -344,9 +516,9 @@ private:
     consume(); // :
     consumeWhitespace();
 
-    // Value parsing: consume until ; or }
-    while (position_ < tokens_.size() && !peek().is(TokenType::Semicolon) &&
-           !peek().is(TokenType::CloseCurly)) {
+    // Value parsing: consume until ; or } or EOF
+    while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+           !peek().is(TokenType::Semicolon) && !peek().is(TokenType::CloseCurly)) {
       // Check for !important
       if (peek().is(TokenType::Delim) && peek().value == "!") {
         consume();
