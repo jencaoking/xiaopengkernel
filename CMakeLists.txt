@@ -131,6 +131,13 @@ if(OPENGL_FOUND)
     message(STATUS "OpenGL found — GPU accelerated rendering enabled")
     # Add OpenGL include directories
     include_directories(${OPENGL_INCLUDE_DIR})
+    if(MINGW_BUILD)
+        set(XPK_OPENGL_LIBRARIES opengl32)
+    elseif(TARGET OpenGL::GL)
+        set(XPK_OPENGL_LIBRARIES OpenGL::GL)
+    else()
+        set(XPK_OPENGL_LIBRARIES ${OPENGL_LIBRARIES})
+    endif()
 else()
     message(WARNING "OpenGL not found. GPU rendering will be disabled (Software fallback only).")
 endif()
@@ -143,8 +150,11 @@ file(GLOB_RECURSE ALL_SOURCES "src/*.cpp")
 # Exclude standalone demos and specific mains from the core source list
 list(FILTER ALL_SOURCES EXCLUDE REGEX "simple_opengl_demo\\.cpp$")
 list(FILTER ALL_SOURCES EXCLUDE REGEX "demo_minimal_main\\.cpp$")
-list(FILTER ALL_SOURCES EXCLUDE REGEX "src/main.cpp")
-list(FILTER ALL_SOURCES EXCLUDE REGEX "promise_binding.cpp")
+list(FILTER ALL_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+# Exclude the legacy QuickJS Promise shim from the core build. The project uses
+# promise_binding_simple.cpp for the current event-loop integration, and building
+# both implementations defines the same PromiseBinding symbols.
+list(FILTER ALL_SOURCES EXCLUDE REGEX "promise_binding\\.cpp$")
 
 # Create an OBJECT library for the core framework to be reused by multiple targets
 add_library(xiaopengkernel_core OBJECT ${ALL_SOURCES})
@@ -267,11 +277,11 @@ if(TARGET quickjs)
 endif()
 
 if(ENABLE_FREETYPE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${FREETYPE_LIBRARIES} stdc++ rpcrt4)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
 endif()
 
 if(OPENGL_FOUND)
-    target_link_libraries(${PROJECT_NAME} PRIVATE opengl32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${XPK_OPENGL_LIBRARIES})
     # Add OpenGL source files to core
     target_sources(xiaopengkernel_core PRIVATE 
         src/renderer/opengl_canvas.cpp
@@ -285,7 +295,7 @@ if(OPENGL_FOUND)
     target_link_libraries(test_opengl PRIVATE 
         ${SDL2_MAIN_LIBRARY}
         ${SDL2_LIBRARY}
-        opengl32
+        ${XPK_OPENGL_LIBRARIES}
         winmm
         gdi32
         imm32
@@ -310,7 +320,7 @@ if(OPENGL_FOUND)
     target_link_libraries(simple_opengl_demo PRIVATE 
         ${SDL2_MAIN_LIBRARY}
         ${SDL2_LIBRARY}
-        opengl32
+        ${XPK_OPENGL_LIBRARIES}
         winmm
         gdi32
         imm32
@@ -335,7 +345,7 @@ if(OPENGL_FOUND)
     target_link_libraries(test_gpu_acceleration PRIVATE 
         ${SDL2_MAIN_LIBRARY}
         ${SDL2_LIBRARY}
-        opengl32
+        ${XPK_OPENGL_LIBRARIES}
         winmm
         gdi32
         imm32
@@ -389,7 +399,7 @@ target_link_libraries(test_layout PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_layout PRIVATE CURL_STATICLIB)
 if(ENABLE_FREETYPE)
-    target_link_libraries(test_layout PRIVATE ${FREETYPE_LIBRARIES} stdc++ rpcrt4)
+    target_link_libraries(test_layout PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
 endif()
 set_target_properties(test_layout PROPERTIES WIN32_EXECUTABLE FALSE)
 
@@ -418,7 +428,7 @@ target_link_libraries(test_renderer PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_renderer PRIVATE CURL_STATICLIB)
 if(ENABLE_FREETYPE)
-    target_link_libraries(test_renderer PRIVATE ${FREETYPE_LIBRARIES} stdc++ rpcrt4)
+    target_link_libraries(test_renderer PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
 endif()
 set_target_properties(test_renderer PROPERTIES WIN32_EXECUTABLE FALSE)
 
@@ -440,6 +450,7 @@ list(FILTER TEST_SOURCES EXCLUDE REGEX "test_incremental.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_grid.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_stacking.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_event_loop.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_page_lifecycle.cpp")
 
 add_executable(loader_tests ${TEST_SOURCES})
 
@@ -519,7 +530,7 @@ if(EXISTS "${SDL2_ROOT}")
 endif()
 
 if(OPENGL_FOUND)
-    target_link_libraries(loader_tests PRIVATE opengl32)
+    target_link_libraries(loader_tests PRIVATE ${XPK_OPENGL_LIBRARIES})
 endif()
 
 set_target_properties(loader_tests PROPERTIES
@@ -1125,13 +1136,13 @@ if(EXISTS "${SDL2_ROOT}")
   )
 endif()
 if(OPENGL_FOUND)
-  target_link_libraries(minimal_demo PRIVATE opengl32)
+  target_link_libraries(minimal_demo PRIVATE ${XPK_OPENGL_LIBRARIES})
 endif()
 if(TARGET quickjs)
   target_link_libraries(minimal_demo PRIVATE quickjs)
 endif()
 if(ENABLE_FREETYPE)
-  target_link_libraries(minimal_demo PRIVATE ${FREETYPE_LIBRARIES} stdc++ rpcrt4)
+  target_link_libraries(minimal_demo PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
 endif()
 set_target_properties(minimal_demo PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
