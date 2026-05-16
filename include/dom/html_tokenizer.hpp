@@ -174,6 +174,10 @@ private:
     void handleAfterDoctypeSystemIdentifierState();
     void handleBogusDoctypeState();
     
+    // Keep owned input alive for constructors that receive temporary std::string
+    // or ByteBuffer values. input_ points either at ownedInput_ or at an
+    // externally-managed string_view.
+    std::string ownedInput_;
     std::string_view input_;
     size_t position_ = 0;
     size_t line_ = 1;
@@ -207,12 +211,13 @@ inline HtmlTokenizer::HtmlTokenizer(std::string_view input)
 }
 
 inline HtmlTokenizer::HtmlTokenizer(const loader::ByteBuffer& input)
-    : input_(reinterpret_cast<const char*>(input.data()), input.size()) {
+    : ownedInput_(reinterpret_cast<const char*>(input.data()), input.size()),
+      input_(ownedInput_) {
     currentToken_ = Token::makeEndOfFile();
 }
 
 inline HtmlTokenizer::HtmlTokenizer(const std::string& input)
-    : input_(input) {
+    : ownedInput_(input), input_(ownedInput_) {
     currentToken_ = Token::makeEndOfFile();
 }
 
