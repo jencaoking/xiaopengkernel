@@ -143,8 +143,8 @@ file(GLOB_RECURSE ALL_SOURCES "src/*.cpp")
 # Exclude standalone demos and specific mains from the core source list
 list(FILTER ALL_SOURCES EXCLUDE REGEX "simple_opengl_demo\\.cpp$")
 list(FILTER ALL_SOURCES EXCLUDE REGEX "demo_minimal_main\\.cpp$")
-list(FILTER ALL_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
-list(FILTER ALL_SOURCES EXCLUDE REGEX "promise_binding\\.cpp$")
+list(FILTER ALL_SOURCES EXCLUDE REGEX "src/main.cpp")
+list(FILTER ALL_SOURCES EXCLUDE REGEX "promise_binding.cpp")
 
 # Create an OBJECT library for the core framework to be reused by multiple targets
 add_library(xiaopengkernel_core OBJECT ${ALL_SOURCES})
