@@ -117,18 +117,25 @@ private:
 
   bool simpleMatch(dom::ElementPtr elem, const std::string& selector) {
     // Very simple matching for demonstration
-    if (selector.empty()) return false;
+    if (selector.empty() || !elem) return false;
     
     if (selector[0] == '#') {
       return elem->id() == selector.substr(1);
     } else if (selector[0] == '.') {
       return elem->hasClass(selector.substr(1));
     } else if (selector[0] == '[') {
-      // Attribute selector - simplified
-      return true;
+      // Attribute selector - simplified check for existence
+      size_t endBracket = selector.find(']');
+      if (endBracket != std::string::npos) {
+        std::string attrName = selector.substr(1, endBracket - 1);
+        // Simplified: just check if attribute exists
+        return elem->hasAttribute(attrName);
+      }
+      return false;
     } else if (selector[0] == ':') {
-      // Pseudo-class
-      return true;
+      // Pseudo-class - simplified matching
+      std::string pseudo = selector.substr(1);
+      return matchPseudoClass(elem, pseudo);
     } else {
       // Tag name
       return dom::toLower(elem->localName()) == dom::toLower(selector);
@@ -321,6 +328,7 @@ private:
   }
 
   bool matchNthChild(dom::ElementPtr element, const std::string& formula) {
+    if (!element) return false;
     // Strip parentheses if present
     std::string f = formula;
     if (!f.empty() && f[0] == '(') {
@@ -335,6 +343,7 @@ private:
   }
 
   bool matchNthLastChild(dom::ElementPtr element, const std::string& formula) {
+    if (!element) return false;
     std::string f = formula;
     if (!f.empty() && f[0] == '(') {
       f = f.substr(1);
@@ -348,6 +357,7 @@ private:
   }
 
   bool matchNthOfType(dom::ElementPtr element, const std::string& formula) {
+    if (!element) return false;
     std::string f = formula;
     if (!f.empty() && f[0] == '(') {
       f = f.substr(1);
@@ -361,13 +371,14 @@ private:
   }
 
   bool matchNthLastOfType(dom::ElementPtr element, const std::string& formula) {
+    if (!element) return false;
     // Similar to nth-last-child but counts only same-type siblings
     return matchNthOfType(element, formula); // Simplified
   }
 
   bool matchNotPseudoClass(dom::ElementPtr element, const std::string& name) {
     // Extract the inner selector from :not(...)
-    if (name.size() < 5) return false;
+    if (name.size() < 5 || !element) return false;
     
     std::string inner = name.substr(4, name.size() - 5);
     inner = trimWhitespace(inner);
@@ -387,10 +398,11 @@ private:
       }
     }
     
-    return true; // Default to not matching if we can't parse
+    return false; // Default to false if we can't parse
   }
 
-  bool matchHasPseudoClass(dom::ElementPtr element, const std::string& name) {
+  bool matchHasPseudoClass(dom::ElementPtr element, const std::string& /*name*/) {
+    if (!element) return false;
     // Simplified :has selector
     // Check if element has any children
     return !element->isEmpty();
@@ -483,7 +495,7 @@ inline bool SelectorEngine::evaluateNthFormula(int index, const std::string& for
   bool isNumber = true;
   for (size_t i = 0; i < trimmed.size(); i++) {
     if (i == 0 && (trimmed[i] == '+' || trimmed[i] == '-')) continue;
-    if (!std::isdigit(trimmed[i])) {
+    if (!std::isdigit(static_cast<unsigned char>(trimmed[i]))) {
       isNumber = false;
       break;
     }
@@ -539,13 +551,22 @@ inline bool SelectorEngine::evaluateNthFormula(int index, const std::string& for
     return index == b;
   }
 
-  // Check if (index - b) is divisible by a and the result is non-negative
+  // Check if n is integer and in valid range
+  // n = (index - b) / a must be integer >= 0 when a > 0
+  // or <= 0 when a < 0
   int diff = index - b;
+  
+  // Must be divisible
+  if (diff % a != 0) {
+    return false;
+  }
+  
+  int n = diff / a;
+  
   if (a > 0) {
-    return diff >= 0 && diff % a == 0;
+    return n >= 0;
   } else {
-    // Negative a
-    return diff <= 0 && diff % a == 0;
+    return n <= 0;
   }
 }
 
