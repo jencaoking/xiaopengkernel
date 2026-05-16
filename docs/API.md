@@ -2238,23 +2238,58 @@ if (engine.initialize()) {
 #### Document 对象 (`document`)
 
 - `getElementById(id)`: 返回具有指定 ID 的 Element 对象。
+- `getElementsByTagName(name)`: 返回包含指定标签名的所有元素数组。
+- `getElementsByClassName(className)`: 返回包含指定类名的所有元素数组。
+- `querySelector(selector)`: 返回匹配选择器的第一个元素（支持 `#id`, `.class`, `tagname`）。
+- `querySelectorAll(selector)`: 返回匹配选择器的所有元素数组。
 - `createElement(tagName)`: 创建一个新的 Element 对象。
+- `body`: 获取 document.body 元素。
+- `documentElement`: 获取 document.documentElement (html 元素)。
+- `title`: 获取或设置文档标题。
 - `addEventListener(type, callback)`: 在 Document 上注册事件监听器。
 - `removeEventListener(type, callback)`: 移除 Document 上的事件监听器。
 - `dispatchEvent(type)`: 触发 Document 上的指定事件。
 
 #### Element 对象
 
-- `id`: 获取元素 ID (只读)。
+- `id`: 获取或设置元素 ID。
+- `className`: 获取或设置元素的 class 属性字符串。
 - `tagName`: 获取元素标签名 (只读, 大写)。
-- `innerHTML`: 获取或设置元素的 HTML 内容 (Setter 会解析 HTML 片段并替换子节点)。
+- `innerHTML`: 获取或设置元素的 HTML 内容。
+- `textContent`: 获取或设置元素的文本内容。
 - `style`: 获取或设置 `style` 属性字符串。
+- `children`: 获取所有子元素（HTMLCollection）。
+- `childElementCount`: 获取子元素数量。
+- `parentElement`: 获取父元素（只读）。
+- `firstElementChild`: 获取第一个子元素。
+- `lastElementChild`: 获取最后一个子元素。
+- `nextElementSibling`: 获取下一个兄弟元素。
+- `previousElementSibling`: 获取上一个兄弟元素。
+- `classList`: 获取 DOMTokenList 对象。
 - `setAttribute(name, value)`: 设置元素属性。
-- `appendChild(child)`: 将子元素添加到当前元素末尾，返回添加的子元素。
-- `removeChild(child)`: 移除指定的子元素，返回被移除的子元素。
+- `getAttribute(name)`: 获取元素属性值。
+- `hasAttribute(name)`: 检查元素是否有指定属性。
+- `removeAttribute(name)`: 移除元素属性。
+- `getElementsByTagName(name)`: 获取所有指定标签名的后代元素。
+- `getElementsByClassName(className)`: 获取所有指定类名的后代元素。
+- `querySelector(selector)`: 返回匹配选择器的第一个后代元素。
+- `querySelectorAll(selector)`: 返回匹配选择器的所有后代元素。
+- `appendChild(child)`: 将子元素添加到当前元素末尾。
+- `removeChild(child)`: 移除指定的子元素。
 - `addEventListener(type, callback)`: 注册事件监听器。
 - `removeEventListener(type, callback)`: 移除事件监听器。
 - `dispatchEvent(type)`: 触发指定事件。
+
+#### DOMTokenList (classList)
+
+- `add(className)`: 添加一个或多个类名。
+- `remove(className)`: 移除一个或多个类名。
+- `toggle(className)`: 切换类名（存在则移除，不存在则添加）。
+- `contains(className)`: 检查是否包含指定类名。
+- `replace(oldClass, newClass)`: 替换类名。
+- `item(index)`: 获取指定索引的类名。
+- `length`: 获取类名数量。
+- `toString()`: 返回类名字符串。
 
 ### 3. 事件系统 (Event System)
 
@@ -2293,9 +2328,16 @@ element.dispatchEvent("click");
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | `type` | `string` | 事件类型名称 |
-| `target` | `null` | 事件目标节点（当前版本为 null） |
-| `bubbles` | `boolean` | 是否冒泡（当前版本为 false） |
-| `cancelable` | `boolean` | 是否可取消（当前版本为 false） |
+| `target` | `Element` | 事件目标节点 |
+| `currentTarget` | `Element` | 当前正在处理事件的目标（冒泡/捕获阶段） |
+| `bubbles` | `boolean` | 是否冒泡 |
+| `cancelable` | `boolean` | 是否可取消 |
+| `defaultPrevented` | `boolean` | 是否已调用 preventDefault() |
+| `returnValue` | `boolean` | 事件返回值 |
+| `eventPhase` | `number` | 事件阶段 (0=none, 1=capture, 2=target, 3=bubble) |
+| `timeStamp` | `number` | 事件时间戳（毫秒） |
+| `isTrusted` | `boolean` | 是否为浏览器生成的事件 |
+| `composed` | `boolean` | 事件是否跨 Shadow DOM 边界传播 |
 
 #### 完整示例
 

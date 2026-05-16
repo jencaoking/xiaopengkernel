@@ -36,6 +36,9 @@ public:
       // We don't own the Document pointer
     };
     JS_NewClass(JS_GetRuntime(ctx), s_documentClassId, &docDef);
+
+    // Register ClassList class
+    ClassListBinding::registerClass(ctx);
   }
 
   // Create a JS object wrapping a DOM Document
@@ -77,6 +80,30 @@ public:
         ctx, obj, "createElement",
         JS_NewCFunction(ctx, document_createElement, "createElement", 1));
 
+    // body property (read-only)
+    JSAtom atom = JS_NewAtom(ctx, "body");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, document_get_body, "get_body", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // documentElement property (read-only)
+    atom = JS_NewAtom(ctx, "documentElement");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, document_get_documentElement, "get_documentElement", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // title property (getter/setter)
+    atom = JS_NewAtom(ctx, "title");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, document_get_title, "get_title", 0),
+                            JS_NewCFunction(ctx, document_set_title, "set_title", 1),
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
     // Add event methods on document (targeting the document element)
     JS_SetPropertyStr(
         ctx, obj, "addEventListener",
@@ -112,11 +139,19 @@ public:
         JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
     JS_FreeAtom(ctx, atom);
 
-    // id (getter)
+    // id (getter/setter)
     atom = JS_NewAtom(ctx, "id");
     JS_DefinePropertyGetSet(ctx, obj, atom,
                             JS_NewCFunction(ctx, element_get_id, "get_id", 0),
-                            JS_UNDEFINED, // Read-only
+                            JS_NewCFunction(ctx, element_set_id, "set_id", 1),
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // className (getter/setter)
+    atom = JS_NewAtom(ctx, "className");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_className, "get_className", 0),
+                            JS_NewCFunction(ctx, element_set_className, "set_className", 1),
                             JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
     JS_FreeAtom(ctx, atom);
 
@@ -210,6 +245,70 @@ public:
     JS_SetPropertyStr(
         ctx, obj, "dispatchEvent",
         JS_NewCFunction(ctx, element_dispatchEvent, "dispatchEvent", 1));
+
+    // children (read-only)
+    atom = JS_NewAtom(ctx, "children");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_children, "get_children", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // childElementCount (read-only)
+    atom = JS_NewAtom(ctx, "childElementCount");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_childElementCount, "get_childElementCount", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // parentElement (read-only)
+    atom = JS_NewAtom(ctx, "parentElement");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_parentElement, "get_parentElement", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // firstElementChild (read-only)
+    atom = JS_NewAtom(ctx, "firstElementChild");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_firstElementChild, "get_firstElementChild", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // lastElementChild (read-only)
+    atom = JS_NewAtom(ctx, "lastElementChild");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_lastElementChild, "get_lastElementChild", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // nextElementSibling (read-only)
+    atom = JS_NewAtom(ctx, "nextElementSibling");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_nextElementSibling, "get_nextElementSibling", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // previousElementSibling (read-only)
+    atom = JS_NewAtom(ctx, "previousElementSibling");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_previousElementSibling, "get_previousElementSibling", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
+
+    // classList (read-only)
+    atom = JS_NewAtom(ctx, "classList");
+    JS_DefinePropertyGetSet(ctx, obj, atom,
+                            JS_NewCFunction(ctx, element_get_classList, "get_classList", 0),
+                            JS_UNDEFINED,
+                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, atom);
 
     return obj;
   }
@@ -341,6 +440,171 @@ private:
       return JS_EXCEPTION;
 
     return JSBinding::toJSString(ctx, libraryElem->id());
+  }
+
+  // element.id setter
+  static JSValue element_set_id(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv) {
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string id = JSBinding::toStdString(ctx, argv[0]);
+    libraryElem->setId(id);
+
+    return JS_UNDEFINED;
+  }
+
+  // element.className getter
+  static JSValue element_get_className(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    return JSBinding::toJSString(ctx, libraryElem->className());
+  }
+
+  // element.className setter
+  static JSValue element_set_className(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv) {
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string className = JSBinding::toStdString(ctx, argv[0]);
+    libraryElem->setClassName(className);
+
+    return JS_UNDEFINED;
+  }
+
+  // element.children getter
+  static JSValue element_get_children(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    JSValue arr = JS_NewArray(ctx);
+    size_t idx = 0;
+    for (auto child = libraryElem->firstElementChild(); child;
+         child = child->nextElementSibling()) {
+      JS_DefinePropertyValueUint32(
+          ctx, arr, idx++, wrapElement(ctx, child.get()),
+          JS_PROP_WRITABLE | JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
+    }
+    return arr;
+  }
+
+  // element.childElementCount getter
+  static JSValue element_get_childElementCount(JSContext *ctx, JSValueConst this_val,
+                                               int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    return JS_NewInt64(ctx, static_cast<int64_t>(libraryElem->childElementCount()));
+  }
+
+  // element.parentElement getter
+  static JSValue element_get_parentElement(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    auto parent = libraryElem->parentNode();
+    if (parent && parent->nodeType() == dom::NodeType::Element) {
+      return wrapElement(ctx, static_cast<dom::Element*>(parent.get()));
+    }
+    return JS_NULL;
+  }
+
+  // element.firstElementChild getter
+  static JSValue element_get_firstElementChild(JSContext *ctx, JSValueConst this_val,
+                                              int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    auto child = libraryElem->firstElementChild();
+    return child ? wrapElement(ctx, child.get()) : JS_NULL;
+  }
+
+  // element.lastElementChild getter
+  static JSValue element_get_lastElementChild(JSContext *ctx, JSValueConst this_val,
+                                              int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    auto child = libraryElem->lastElementChild();
+    return child ? wrapElement(ctx, child.get()) : JS_NULL;
+  }
+
+  // element.nextElementSibling getter
+  static JSValue element_get_nextElementSibling(JSContext *ctx, JSValueConst this_val,
+                                               int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    auto sibling = libraryElem->nextElementSibling();
+    return sibling ? wrapElement(ctx, sibling.get()) : JS_NULL;
+  }
+
+  // element.previousElementSibling getter
+  static JSValue element_get_previousElementSibling(JSContext *ctx, JSValueConst this_val,
+                                                   int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    auto sibling = libraryElem->previousElementSibling();
+    return sibling ? wrapElement(ctx, sibling.get()) : JS_NULL;
+  }
+
+  // element.classList getter
+  static JSValue element_get_classList(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *libraryElem =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!libraryElem)
+      return JS_EXCEPTION;
+
+    return ClassListBinding::create(ctx, libraryElem);
   }
 
   // element.tagName getter
@@ -807,7 +1071,7 @@ private:
     return JS_NewBool(ctx, value.has_value());
   }
 
-  // element.removeAttribute(name)
+  // document.removeAttribute(name)
   static JSValue element_removeAttribute(JSContext *ctx, JSValueConst this_val,
                                          int argc, JSValueConst *argv) {
     dom::Element *element =
@@ -818,15 +1082,237 @@ private:
       return JS_EXCEPTION;
 
     std::string name = JSBinding::toStdString(ctx, argv[0]);
-    // TODO: Implement removeAttribute in dom.hpp
-    // For now, we'll skip, but we can at least indicate success
+    element->removeAttribute(name);
     return JS_UNDEFINED;
   }
+
+  // document.body getter
+  static JSValue document_get_body(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Document *doc =
+        (dom::Document *)JS_GetOpaque(this_val, s_documentClassId);
+    if (!doc)
+      return JS_EXCEPTION;
+
+    auto body = doc->body();
+    return body ? wrapElement(ctx, body.get()) : JS_NULL;
+  }
+
+  // document.documentElement getter
+  static JSValue document_get_documentElement(JSContext *ctx, JSValueConst this_val,
+                                             int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Document *doc =
+        (dom::Document *)JS_GetOpaque(this_val, s_documentClassId);
+    if (!doc)
+      return JS_EXCEPTION;
+
+    auto elem = doc->documentElement();
+    return elem ? wrapElement(ctx, elem.get()) : JS_NULL;
+  }
+
+  // document.title getter
+  static JSValue document_get_title(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Document *doc =
+        (dom::Document *)JS_GetOpaque(this_val, s_documentClassId);
+    if (!doc)
+      return JS_EXCEPTION;
+
+    return JSBinding::toJSString(ctx, doc->titleText());
+  }
+
+  // document.title setter
+  static JSValue document_set_title(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv) {
+    dom::Document *doc =
+        (dom::Document *)JS_GetOpaque(this_val, s_documentClassId);
+    if (!doc)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string title = JSBinding::toStdString(ctx, argv[0]);
+    doc->setTitleText(title);
+    return JS_UNDEFINED;
+  }
+
+  // ClassListBinding class for element.classList
+  class ClassListBinding {
+  public:
+    static JSClassID s_classListClassId;
+
+    static void registerClass(JSContext *ctx) {
+      if (s_classListClassId == 0) {
+        JS_NewClassID(&s_classListClassId);
+        JSClassDef def;
+        memset(&def, 0, sizeof(JSClassDef));
+        def.class_name = "DOMTokenList";
+        def.finalizer = [](JSRuntime *, JSValue) {};
+        JS_NewClass(JS_GetRuntime(ctx), s_classListClassId, &def);
+      }
+    }
+
+    static JSValue create(JSContext *ctx, dom::Element *element) {
+      JSValue obj = JS_NewObjectClass(ctx, s_classListClassId);
+      JS_SetOpaque(obj, element);
+
+      JS_SetPropertyStr(ctx, obj, "add",
+          JS_NewCFunction(ctx, classList_add, "add", 1));
+      JS_SetPropertyStr(ctx, obj, "remove",
+          JS_NewCFunction(ctx, classList_remove, "remove", 1));
+      JS_SetPropertyStr(ctx, obj, "toggle",
+          JS_NewCFunction(ctx, classList_toggle, "toggle", 1));
+      JS_SetPropertyStr(ctx, obj, "contains",
+          JS_NewCFunction(ctx, classList_contains, "contains", 1));
+      JS_SetPropertyStr(ctx, obj, "replace",
+          JS_NewCFunction(ctx, classList_replace, "replace", 2));
+      JS_SetPropertyStr(ctx, obj, "item",
+          JS_NewCFunction(ctx, classList_item, "item", 1));
+      JS_SetPropertyStr(ctx, obj, "toString",
+          JS_NewCFunction(ctx, classList_toString, "toString", 0));
+
+      JSAtom atom = JS_NewAtom(ctx, "length");
+      JS_DefinePropertyGetSet(ctx, obj, atom,
+          JS_NewCFunction(ctx, classList_get_length, "get_length", 0),
+          JS_UNDEFINED,
+          JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+      JS_FreeAtom(ctx, atom);
+
+      return obj;
+    }
+
+  private:
+    static dom::Element *getElement(JSContext *ctx, JSValueConst this_val) {
+      return static_cast<dom::Element *>(JS_GetOpaque(this_val, s_classListClassId));
+    }
+
+    static JSValue classList_add(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv) {
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem || argc < 1)
+        return JS_EXCEPTION;
+
+      for (int i = 0; i < argc; ++i) {
+        std::string className = JSBinding::toStdString(ctx, argv[i]);
+        if (!className.empty()) {
+          elem->addClass(className);
+        }
+      }
+      return JS_UNDEFINED;
+    }
+
+    static JSValue classList_remove(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv) {
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem || argc < 1)
+        return JS_EXCEPTION;
+
+      for (int i = 0; i < argc; ++i) {
+        std::string className = JSBinding::toStdString(ctx, argv[i]);
+        if (!className.empty()) {
+          elem->removeClass(className);
+        }
+      }
+      return JS_UNDEFINED;
+    }
+
+    static JSValue classList_toggle(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv) {
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem || argc < 1)
+        return JS_EXCEPTION;
+
+      std::string className = JSBinding::toStdString(ctx, argv[0]);
+      bool force = (argc > 1) ? JS_ToBool(ctx, argv[1]) : !elem->hasClass(className);
+
+      if (force) {
+        elem->addClass(className);
+        return JS_TRUE;
+      } else {
+        elem->removeClass(className);
+        return JS_FALSE;
+      }
+    }
+
+    static JSValue classList_contains(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv) {
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem || argc < 1)
+        return JS_EXCEPTION;
+
+      std::string className = JSBinding::toStdString(ctx, argv[0]);
+      return JS_NewBool(ctx, elem->hasClass(className));
+    }
+
+    static JSValue classList_replace(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv) {
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem || argc < 2)
+        return JS_EXCEPTION;
+
+      std::string oldClass = JSBinding::toStdString(ctx, argv[0]);
+      std::string newClass = JSBinding::toStdString(ctx, argv[1]);
+
+      if (elem->hasClass(oldClass) && !newClass.empty()) {
+        elem->removeClass(oldClass);
+        elem->addClass(newClass);
+        return JS_TRUE;
+      }
+      return JS_FALSE;
+    }
+
+    static JSValue classList_item(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv) {
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem || argc < 1)
+        return JS_EXCEPTION;
+
+      int64_t index;
+      if (JS_ToInt64(ctx, &index, argv[0]))
+        return JS_EXCEPTION;
+
+      auto classes = elem->classList();
+      if (index >= 0 && static_cast<size_t>(index) < classes.size()) {
+        return JSBinding::toJSString(ctx, classes[static_cast<size_t>(index)]);
+      }
+      return JS_NULL;
+    }
+
+    static JSValue classList_get_length(JSContext *ctx, JSValueConst this_val,
+                                        int argc, JSValueConst *argv) {
+      (void)argc;
+      (void)argv;
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem)
+        return JS_EXCEPTION;
+
+      return JS_NewInt64(ctx, static_cast<int64_t>(elem->classList().size()));
+    }
+
+    static JSValue classList_toString(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv) {
+      (void)argc;
+      (void)argv;
+      dom::Element *elem = getElement(ctx, this_val);
+      if (!elem)
+        return JS_EXCEPTION;
+
+      return JSBinding::toJSString(ctx, elem->className());
+    }
+  };
 };
+
 
 // Static definitions need to be inline for header-only
 inline JSClassID DOMBinding::s_elementClassId = 0;
 inline JSClassID DOMBinding::s_documentClassId = 0;
+inline JSClassID DOMBinding::ClassListBinding::s_classListClassId = 0;
 
 } // namespace script
 } // namespace xiaopeng

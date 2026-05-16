@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -84,13 +85,24 @@ public:
     }
   }
 
-  // Create a simple JS event object: { type: "...", target: null }
-  static JSValue createEventObject(JSContext *ctx, const std::string &type) {
+  // Create a simple JS event object with full properties
+  static JSValue createEventObject(JSContext *ctx, const std::string &type,
+                                   bool bubbles = false, bool cancelable = false,
+                                   JSValue target = JS_NULL) {
     JSValue obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, type.c_str()));
-    JS_SetPropertyStr(ctx, obj, "target", JS_NULL);
-    JS_SetPropertyStr(ctx, obj, "bubbles", JS_FALSE);
-    JS_SetPropertyStr(ctx, obj, "cancelable", JS_FALSE);
+    JS_SetPropertyStr(ctx, obj, "target", JS_IsNull(target) ? JS_NULL : JS_DupValue(ctx, target));
+    JS_SetPropertyStr(ctx, obj, "currentTarget", JS_NULL);
+    JS_SetPropertyStr(ctx, obj, "bubbles", JS_NewBool(ctx, bubbles));
+    JS_SetPropertyStr(ctx, obj, "cancelable", JS_NewBool(ctx, cancelable));
+    JS_SetPropertyStr(ctx, obj, "defaultPrevented", JS_FALSE);
+    JS_SetPropertyStr(ctx, obj, "returnValue", JS_TRUE);
+    JS_SetPropertyStr(ctx, obj, "eventPhase", JS_NewInt64(ctx, 0));
+    JS_SetPropertyStr(ctx, obj, "timeStamp", JS_NewInt64(ctx,
+        static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count())));
+    JS_SetPropertyStr(ctx, obj, "isTrusted", JS_FALSE);
+    JS_SetPropertyStr(ctx, obj, "composed", JS_NewBool(ctx, bubbles));
     return obj;
   }
 
