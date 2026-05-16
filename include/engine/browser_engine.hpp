@@ -18,6 +18,7 @@
 #include <renderer/bitmap_canvas.hpp>
 #include <renderer/opengl_canvas.hpp>
 #include <renderer/painting_algorithm.hpp>
+#include <renderer/render_tree.hpp>
 #include <script/script_engine.hpp>
 #include <window/sdl_window.hpp>
 
@@ -59,6 +60,9 @@ public:
 
   // Mark that a DOM mutation requires an update
   void markDirty(dom::DirtyFlag hint) {
+    if (m_document) {
+      m_renderTree.onDOMChanged(m_document, hint);
+    }
     if (hint == dom::DirtyFlag::NeedsLayout)
       m_needsLayout = true;
     m_needsPaint = true; // Layout always implies paint
@@ -114,7 +118,7 @@ private:
   // Document state
   std::shared_ptr<dom::Document> m_document;
   css::StyleSheet m_stylesheet;
-  layout::LayoutBoxPtr m_layoutRoot;
+  renderer::RenderTree m_renderTree;
   std::string m_baseUrl; // Resolved base URL for the current document
   std::shared_ptr<ResourceTree> m_resourceTree; // Sub-resource dependency graph
   layout::FormManager m_formMgr; // Form controls manager (DOM bound)

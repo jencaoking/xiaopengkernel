@@ -3,9 +3,11 @@
 #include "../dom/html_types.hpp"
 #include "../layout/layout_box.hpp"
 #include "../css/computed_style.hpp"
+#include "../css/css_parser.hpp"
 #include <memory>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 #include <functional>
 
 namespace xiaopeng {
@@ -33,10 +35,24 @@ public:
         return std::shared_ptr<RenderObject>(new RenderObject(domNode));
     }
 
+    // Create a RenderObject with computed style
+    static RenderObjectPtr create(dom::NodePtr domNode, const css::ComputedStyle& style) {
+        auto obj = std::shared_ptr<RenderObject>(new RenderObject(domNode));
+        obj->style_ = style;
+        return obj;
+    }
+
     ~RenderObject() = default;
 
     // DOM node association
     dom::NodePtr domNode() const { return domNode_.lock(); }
+    
+    // Computed style for this render object
+    const css::ComputedStyle& style() const { return style_; }
+    void setStyle(const css::ComputedStyle& style) { 
+        style_ = style; 
+        markDirty(DirtyState::NeedsLayout);
+    }
     
     // Layout box (computed during layout)
     layout::LayoutBoxPtr layoutBox() const { return layoutBox_; }
@@ -45,6 +61,30 @@ public:
     // Parent/Children in render tree
     RenderObjectPtr parent() const { return parent_.lock(); }
     const std::vector<RenderObjectPtr>& children() const { return children_; }
+    
+    // Sibling traversal
+    RenderObjectPtr firstChild() const { return children_.empty() ? nullptr : children_.front(); }
+    RenderObjectPtr lastChild() const { return children_.empty() ? nullptr : children_.back(); }
+    RenderObjectPtr nextSibling() const {
+        if (auto p = parent_.lock()) {
+            auto it = std::find(p->children_.begin(), p->children_.end(), 
+                                  std::const_pointer_cast<RenderObject>(shared_from_this()));
+            if (it != p->children_.end() && std::next(it) != p->children_.end()) {
+                return *std::next(it);
+            }
+        }
+        return nullptr;
+    }
+    RenderObjectPtr previousSibling() const {
+        if (auto p = parent_.lock()) {
+            auto it = std::find(p->children_.begin(), p->children_.end(), 
+                                  std::const_pointer_cast<RenderObject>(shared_from_this()));
+            if (it != p->children_.begin()) {
+                return *std::prev(it);
+            }
+        }
+        return nullptr;
+    }
 
     void appendChild(RenderObjectPtr child) {
         if (!child) return;
@@ -77,7 +117,7 @@ public:
             dirtyState_ = state;
             // Propagate to parent
             if (auto p = parent_.lock()) {
-                p->markDirty(state);
+                p->markDirty(DirtyState::NeedsPaint);
             }
         }
     }
@@ -128,6 +168,7 @@ private:
         : domNode_(domNode), dirtyState_(DirtyState::NeedsLayout) {}
 
     dom::WeakNodePtr domNode_;
+    css::ComputedStyle style_;
     layout::LayoutBoxPtr layoutBox_;
     
     WeakRenderObjectPtr parent_;
@@ -138,19 +179,25 @@ private:
     BoundingBox damageRect_;
 };
 
+// Forward declaration for RenderTreeBuilder
+class RenderTreeBuilder;
+
 // RenderTree manages the entire render tree and coordinates updates
 class RenderTree {
 public:
     RenderTree() = default;
     ~RenderTree() = default;
 
-    // Build render tree from DOM
-    void build(dom::NodePtr domRoot) {
-        root_ = buildRenderTree(domRoot, nullptr);
-    }
+    // Build render tree from DOM with stylesheet
+    void build(dom::NodePtr domRoot, const css::StyleSheet& stylesheet);
 
     // Get root of render tree
     RenderObjectPtr root() const { return root_; }
+
+    // Set root of layout box (for backwards compatibility)
+    layout::LayoutBoxPtr layoutRoot() const { 
+        return root_ ? root_->layoutBox() : nullptr; 
+    }
 
     // Collect all dirty objects that need layout
     std::vector<RenderObjectPtr> collectDirtyLayoutObjects() {
@@ -184,10 +231,11 @@ public:
         }
     }
 
-    // Find render object for a DOM node
+    // Find render object for a DOM node (fast lookup using map)
     RenderObjectPtr findRenderObject(dom::NodePtr domNode) {
-        if (!root_ || !domNode) return nullptr;
-        return findRenderObjectRecursive(root_, domNode);
+        if (!domNode) return nullptr;
+        auto it = domToRenderMap_.find(domNode);
+        return it != domToRenderMap_.end() ? it->second : nullptr;
     }
 
     // Update render tree when DOM changes
@@ -201,39 +249,22 @@ public:
                 case dom::DirtyFlag::NeedsPaint:
                     renderObj->markDirty(RenderObject::DirtyState::NeedsPaint);
                     break;
-                default:
-                    break;
             }
+        }
+    }
+
+    // Update bounding boxes from layout boxes
+    void syncBoundingBoxesFromLayout() {
+        if (root_) {
+            syncBoundingBoxesRecursive(root_);
         }
     }
 
 private:
     RenderObjectPtr root_;
+    std::unordered_map<dom::NodePtr, RenderObjectPtr> domToRenderMap_;
 
-    // Recursively build render tree from DOM
-    RenderObjectPtr buildRenderTree(dom::NodePtr domNode, RenderObjectPtr parent) {
-        if (!domNode) return nullptr;
-
-        // Skip non-element nodes (text, comment, etc. can be handled differently)
-        if (domNode->nodeType() != dom::NodeType::Element && 
-            domNode->nodeType() != dom::NodeType::Document) {
-            // For text nodes, we might want to create a text render object
-            // For simplicity, we'll skip them for now
-            return nullptr;
-        }
-
-        auto renderObj = RenderObject::create(domNode);
-        if (parent) {
-            parent->appendChild(renderObj);
-        }
-
-        // Recursively build children
-        for (const auto& domChild : domNode->childNodes()) {
-            buildRenderTree(domChild, renderObj);
-        }
-
-        return renderObj;
-    }
+    friend class RenderTreeBuilder;
 
     void collectDirtyLayoutObjectsRecursive(RenderObjectPtr obj, 
                                             std::vector<RenderObjectPtr>& result) {
@@ -262,14 +293,19 @@ private:
         }
     }
 
-    RenderObjectPtr findRenderObjectRecursive(RenderObjectPtr obj, dom::NodePtr domNode) {
-        if (obj->domNode() == domNode) return obj;
-        
-        for (const auto& child : obj->children()) {
-            auto found = findRenderObjectRecursive(child, domNode);
-            if (found) return found;
+    void syncBoundingBoxesRecursive(RenderObjectPtr obj) {
+        if (auto box = obj->layoutBox()) {
+            auto& dims = box->dimensions();
+            RenderObject::BoundingBox bbox;
+            bbox.x = static_cast<int>(dims.content.x);
+            bbox.y = static_cast<int>(dims.content.y);
+            bbox.width = static_cast<int>(dims.content.width);
+            bbox.height = static_cast<int>(dims.content.height);
+            obj->setBoundingBox(bbox);
         }
-        return nullptr;
+        for (const auto& child : obj->children()) {
+            syncBoundingBoxesRecursive(child);
+        }
     }
 };
 
