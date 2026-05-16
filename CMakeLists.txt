@@ -727,6 +727,41 @@ set_target_properties(test_dom_binding PROPERTIES
 )
 add_test(NAME DOMBindingTests COMMAND test_dom_binding)
 
+# Test Advanced CSS Selector Engine
+add_executable(test_advanced_selector tests/test_advanced_selector.cpp)
+target_include_directories(test_advanced_selector PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(test_advanced_selector PRIVATE "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_advanced_selector PRIVATE ENABLE_QUICKJS)
+if(MINGW_BUILD)
+target_link_libraries(test_advanced_selector PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_advanced_selector PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_advanced_selector PRIVATE CURL_STATICLIB)
+target_link_libraries(test_advanced_selector PRIVATE xiaopengkernel_core quickjs)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(test_advanced_selector PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+set_target_properties(test_advanced_selector PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME AdvancedSelectorTests COMMAND test_advanced_selector)
+
 # Test Event System
 add_executable(test_event tests/test_event.cpp)
 target_include_directories(test_event PRIVATE ${CMAKE_SOURCE_DIR}/include)

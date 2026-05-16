@@ -406,11 +406,58 @@ private:
         } else if (t.is(TokenType::OpenSquare)) {
           consume(); // [
           part.type = SelectorType::Attribute;
+          consumeWhitespace();
+          
           if (peek().is(TokenType::Ident)) {
             part.attributeName = consume().value;
-            // Optional operator and value... skipped for brevity
+            consumeWhitespace();
+            
+            // Check for attribute operator
+            if (!peek().is(TokenType::CloseSquare)) {
+              // Parse operator
+              if (peek().is(TokenType::Delim)) {
+                std::string op;
+                if (peek().value == "=") {
+                  op = "=";
+                  consume();
+                } else if (peek().value == "~" || peek().value == "|" || 
+                          peek().value == "^" || peek().value == "$" || 
+                          peek().value == "*") {
+                  op = consume().value;
+                  if (peek().is(TokenType::Delim) && peek().value == "=") {
+                    op += "=";
+                    consume();
+                  }
+                }
+                
+                part.attributeOperator = op;
+                
+                consumeWhitespace();
+                
+                // Parse value
+                if (peek().is(TokenType::Ident) || peek().is(TokenType::String) || 
+                    peek().is(TokenType::Number)) {
+                  if (peek().is(TokenType::String)) {
+                    part.attributeValue = consume().value;
+                  } else {
+                    part.attributeValue = consume().value;
+                  }
+                  
+                  consumeWhitespace();
+                  
+                  // Check for i flag (case insensitive)
+                  if (peek().is(TokenType::Ident) && 
+                      (peek().value == "i" || peek().value == "I")) {
+                    consume();
+                  }
+                }
+              }
+            }
+            
             consumeUntil(TokenType::CloseSquare);
-            consume(); // ]
+            if (peek().is(TokenType::CloseSquare)) {
+              consume(); // ]
+            }
             gotPart = true;
           }
         } else {

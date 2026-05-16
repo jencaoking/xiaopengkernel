@@ -3,6 +3,7 @@
 #include "../dom/dom.hpp"
 #include "computed_style.hpp"
 #include "css_types.hpp"
+#include "selector_engine.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -156,11 +157,6 @@ private:
                            const SimpleSelector &simple) {
     switch (simple.type) {
     case SelectorType::Tag:
-      // Case-insensitive check generally appropriate for HTML
-      // But my tokenizer might store simplified names.
-      // dom::Element::tagName returns UPPERCASE. dom::Element::localName
-      // returns original/lowercase. Let's assume lowercase for now as
-      // normalized by tree builder.
       return dom::toLower(simple.value) == dom::toLower(element->localName());
     case SelectorType::Class:
       return element->hasClass(simple.value);
@@ -169,13 +165,7 @@ private:
     case SelectorType::Universal:
       return true;
     case SelectorType::Attribute:
-      if (simple.value.empty()) {
-        return element->hasAttribute(simple.attributeName);
-      } else {
-        auto val = element->getAttribute(simple.attributeName);
-        return val.has_value() && val.value() == simple.attributeValue;
-        // Operator support would be here
-      }
+      return matchAttributeSelector(element, simple);
     case SelectorType::PseudoClass:
       return matchPseudoClass(element, simple.value);
     case SelectorType::PseudoElement:
@@ -183,6 +173,39 @@ private:
     default:
       return false;
     }
+  }
+
+  bool matchAttributeSelector(dom::ElementPtr element,
+                              const SimpleSelector &simple) {
+    if (simple.attributeOperator.empty()) {
+      if (simple.attributeValue.empty()) {
+        return element->hasAttribute(simple.attributeName);
+      } else {
+        auto val = element->getAttribute(simple.attributeName);
+        return val.has_value() && val.value() == simple.attributeValue;
+      }
+    }
+    
+    // Use our advanced attribute selector matching
+    AttributeSelector attr;
+    attr.name = simple.attributeName;
+    attr.value = simple.attributeValue;
+    
+    if (simple.attributeOperator == "=") {
+      attr.op = AttributeOperator::Equals;
+    } else if (simple.attributeOperator == "~=") {
+      attr.op = AttributeOperator::Contains;
+    } else if (simple.attributeOperator == "|=") {
+      attr.op = AttributeOperator::DashMatch;
+    } else if (simple.attributeOperator == "^=") {
+      attr.op = AttributeOperator::StartsWith;
+    } else if (simple.attributeOperator == "$=") {
+      attr.op = AttributeOperator::EndsWith;
+    } else if (simple.attributeOperator == "*=") {
+      attr.op = AttributeOperator::ContainsSub;
+    }
+    
+    return SelectorEngine::matchAttributeSelector(element, attr);
   }
 
   bool matchPseudoClass(dom::ElementPtr element, const std::string &name) {
