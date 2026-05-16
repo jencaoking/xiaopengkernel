@@ -136,8 +136,8 @@ private:
         if (decl) {
           block.properties[decl->property] = decl->value;
         } else {
-          while (position_ < tokens_.size() && !peek().is(TokenType::Semicolon) &&
-                 !peek().is(TokenType::CloseCurly)) {
+          while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+                 !peek().is(TokenType::Semicolon) && !peek().is(TokenType::CloseCurly)) {
             consume();
           }
           if (peek().is(TokenType::Semicolon)) consume();
@@ -235,8 +235,8 @@ private:
       if (decl) {
         rule.declarations.push_back(*decl);
       } else {
-        while (position_ < tokens_.size() && !peek().is(TokenType::Semicolon) &&
-               !peek().is(TokenType::CloseCurly)) {
+        while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+               !peek().is(TokenType::Semicolon) && !peek().is(TokenType::CloseCurly)) {
           consume();
         }
         if (peek().is(TokenType::Semicolon)) {
@@ -371,7 +371,6 @@ private:
         } else if (t.is(TokenType::Colon)) {
           consume(); // :
           // Pseudo class/element
-          // Simplified interaction
           if (peek().is(TokenType::Colon)) {
             consume();
             part.type = SelectorType::PseudoElement;
@@ -382,10 +381,26 @@ private:
             part.value = consume().value;
             gotPart = true;
           } else if (peek().is(TokenType::Function)) {
-            part.value = consume().value;
-            consumeUntil(
-                TokenType::CloseParen); // Skip function arguments for now
-            consume();
+            // FIX Bug 5: 保留完整的函数调用（包括参数）
+            std::string funcName = consume().value;
+            std::string args;
+            int parenDepth = 1;
+            while (parenDepth > 0 && position_ < tokens_.size() && 
+                   !peek().is(TokenType::EndOfFile)) {
+              Token argTok = consume();
+              if (argTok.is(TokenType::OpenParen)) {
+                args += "(";
+                parenDepth++;
+              } else if (argTok.is(TokenType::CloseParen)) {
+                args += ")";
+                parenDepth--;
+              } else if (!argTok.is(TokenType::Whitespace)) {
+                args += argTok.value;
+              } else {
+                args += " ";
+              }
+            }
+            part.value = funcName + args;
             gotPart = true;
           }
         } else if (t.is(TokenType::OpenSquare)) {
@@ -454,9 +469,9 @@ private:
     consume(); // :
     consumeWhitespace();
 
-    // Value parsing: consume until ; or }
-    while (position_ < tokens_.size() && !peek().is(TokenType::Semicolon) &&
-           !peek().is(TokenType::CloseCurly)) {
+    // Value parsing: consume until ; or } or EOF
+    while (position_ < tokens_.size() && !peek().is(TokenType::EndOfFile) &&
+           !peek().is(TokenType::Semicolon) && !peek().is(TokenType::CloseCurly)) {
       // Check for !important
       if (peek().is(TokenType::Delim) && peek().value == "!") {
         consume();

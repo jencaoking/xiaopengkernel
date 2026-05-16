@@ -4,6 +4,7 @@
 #include "computed_style.hpp"
 #include "css_types.hpp"
 #include <algorithm>
+#include <cassert>
 #include <cctype>
 #include <cstdio>
 #include <sstream>
@@ -68,10 +69,16 @@ private:
 
   bool matchRecursively(dom::ElementPtr element, const Selector &selector,
                         int index) {
-    if (index < 0)
-      return true;
+    // FIX: 添加边界检查
+    if (index < 0 || index >= static_cast<int>(selector.parts.size())) {
+      return index < 0;
+    }
     if (!element)
       return false;
+
+    // 验证 combinators 向量大小正确（应为 parts.size() - 1）
+    assert(selector.combinators.size() == selector.parts.size() - 1 &&
+           "Combinators size should be parts size minus one");
 
     // 1. Match the "Compound Selector" ending at 'index'
     // A compound selector consists of a chain of parts separated by
@@ -332,33 +339,36 @@ private:
   void applyDeclarations(ComputedStyle &style,
                          const std::vector<Declaration> &decls) {
     for (const auto &decl : decls) {
+      // FIX: 解析 CSS 变量（var() 函数）
+      std::string resolvedValue = resolveCSSVariable(decl.value, style);
+      
       if (decl.property == "display") {
-        if (decl.value == "none")
+        if (resolvedValue == "none")
           style.display = Display::None;
-        else if (decl.value == "block")
+        else if (resolvedValue == "block")
           style.display = Display::Block;
-        else if (decl.value == "inline")
+        else if (resolvedValue == "inline")
           style.display = Display::Inline;
-        else if (decl.value == "flex")
+        else if (resolvedValue == "flex")
           style.display = Display::Flex;
-        else if (decl.value == "inline-block")
+        else if (resolvedValue == "inline-block")
           style.display = Display::InlineBlock;
-        else if (decl.value == "grid")
+        else if (resolvedValue == "grid")
           style.display = Display::Grid;
       } else if (decl.property == "width") {
-        style.width = parseLength(decl.value);
+        style.width = parseLength(resolvedValue);
       } else if (decl.property == "height") {
-        style.height = parseLength(decl.value);
+        style.height = parseLength(resolvedValue);
       } else if (decl.property == "color") {
-        style.color = parseColor(decl.value);
+        style.color = parseColor(resolvedValue);
       } else if (decl.property == "background-color") {
-        style.backgroundColor = parseColor(decl.value);
+        style.backgroundColor = parseColor(resolvedValue);
       } else if (decl.property == "margin") {
-        auto l = parseLength(decl.value);
+        auto l = parseLength(resolvedValue);
         style.marginTop = style.marginRight = style.marginBottom =
             style.marginLeft = l;
       } else if (decl.property == "padding") {
-        auto l = parseLength(decl.value);
+        auto l = parseLength(resolvedValue);
         style.paddingTop = style.paddingRight = style.paddingBottom =
             style.paddingLeft = l;
       } else if (decl.property == "margin-top") {
