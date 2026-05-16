@@ -147,46 +147,178 @@ public:
     JS_FreeAtom(ctx, atom);
 
     // setAttribute method
-    JS_SetPropertyStr(
-        ctx, obj, "setAttribute",
-        JS_NewCFunction(ctx, element_setAttribute, "setAttribute", 2));
+  JS_SetPropertyStr(ctx, obj, "setAttribute",
+      JS_NewCFunction(ctx, element_setAttribute, "setAttribute", 2));
 
-    // getElementsByTagName method
-    JS_SetPropertyStr(
-        ctx, obj, "getElementsByTagName",
-        JS_NewCFunction(ctx, element_getElementsByTagName, "getElementsByTagName", 1));
+  // getElementsByTagName method
+  JS_SetPropertyStr(ctx, obj, "getElementsByTagName",
+      JS_NewCFunction(ctx, element_getElementsByTagName, "getElementsByTagName", 1));
 
-    // getElementsByClassName method
-    JS_SetPropertyStr(
-        ctx, obj, "getElementsByClassName",
-        JS_NewCFunction(ctx, element_getElementsByClassName, "getElementsByClassName", 1));
+  // getElementsByClassName method
+  JS_SetPropertyStr(ctx, obj, "getElementsByClassName",
+      JS_NewCFunction(ctx, element_getElementsByClassName, "getElementsByClassName", 1));
 
-    // querySelector method
-    JS_SetPropertyStr(
-        ctx, obj, "querySelector",
-        JS_NewCFunction(ctx, element_querySelector, "querySelector", 1));
+  // querySelector method
+  JS_SetPropertyStr(ctx, obj, "querySelector",
+      JS_NewCFunction(ctx, element_querySelector, "querySelector", 1));
 
-    // querySelectorAll method
-    JS_SetPropertyStr(
-        ctx, obj, "querySelectorAll",
-        JS_NewCFunction(ctx, element_querySelectorAll, "querySelectorAll", 1));
+  // querySelectorAll method
+  JS_SetPropertyStr(ctx, obj, "querySelectorAll",
+      JS_NewCFunction(ctx, element_querySelectorAll, "querySelectorAll", 1));
 
-    // getAttribute method
-    JS_SetPropertyStr(
-        ctx, obj, "getAttribute",
-        JS_NewCFunction(ctx, element_getAttribute, "getAttribute", 1));
+  // getAttribute method
+  JS_SetPropertyStr(ctx, obj, "getAttribute",
+      JS_NewCFunction(ctx, element_getAttribute, "getAttribute", 1));
 
-    // hasAttribute method
-    JS_SetPropertyStr(
-        ctx, obj, "hasAttribute",
-        JS_NewCFunction(ctx, element_hasAttribute, "hasAttribute", 1));
+  // hasAttribute method
+  JS_SetPropertyStr(ctx, obj, "hasAttribute",
+      JS_NewCFunction(ctx, element_hasAttribute, "hasAttribute", 1));
 
-    // removeAttribute method
-    JS_SetPropertyStr(
-        ctx, obj, "removeAttribute",
-        JS_NewCFunction(ctx, element_removeAttribute, "removeAttribute", 1));
+  // removeAttribute method
+  JS_SetPropertyStr(ctx, obj, "removeAttribute",
+      JS_NewCFunction(ctx, element_removeAttribute, "removeAttribute", 1));
 
-    // appendChild method
+  // classList property (returns a classList object with add, remove, toggle, contains)
+  JSValue classListObj = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, classListObj, "add",
+      JS_NewCFunction(ctx, classList_add, "add", 1));
+  JS_SetPropertyStr(ctx, classListObj, "remove",
+      JS_NewCFunction(ctx, classList_remove, "remove", 1));
+  JS_SetPropertyStr(ctx, classListObj, "toggle",
+      JS_NewCFunction(ctx, classList_toggle, "toggle", 1));
+  JS_SetPropertyStr(ctx, classListObj, "contains",
+      JS_NewCFunction(ctx, classList_contains, "contains", 1));
+  JS_SetPropertyStr(ctx, obj, "classList", classListObj);
+
+  // parentNode (getter)
+  atom = JS_NewAtom(ctx, "parentNode");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_parentNode, "get_parentNode", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // childNodes (getter)
+  atom = JS_NewAtom(ctx, "childNodes");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_childNodes, "get_childNodes", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // children (getter)
+  atom = JS_NewAtom(ctx, "children");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_children, "get_children", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // firstElementChild (getter)
+  atom = JS_NewAtom(ctx, "firstElementChild");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_firstElementChild, "get_firstElementChild", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // lastElementChild (getter)
+  atom = JS_NewAtom(ctx, "lastElementChild");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_lastElementChild, "get_lastElementChild", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // nextElementSibling (getter)
+  atom = JS_NewAtom(ctx, "nextElementSibling");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_nextElementSibling, "get_nextElementSibling", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // previousElementSibling (getter)
+  atom = JS_NewAtom(ctx, "previousElementSibling");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_previousElementSibling, "get_previousElementSibling", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // childElementCount (getter)
+  atom = JS_NewAtom(ctx, "childElementCount");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_childElementCount, "get_childElementCount", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // ownerDocument (getter)
+  atom = JS_NewAtom(ctx, "ownerDocument");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_ownerDocument, "get_ownerDocument", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // nodeType (getter)
+  atom = JS_NewAtom(ctx, "nodeType");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_nodeType, "get_nodeType", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // nodeName (getter)
+  atom = JS_NewAtom(ctx, "nodeName");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_nodeName, "get_nodeName", 0),
+      JS_UNDEFINED,
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // className (getter/setter)
+  atom = JS_NewAtom(ctx, "className");
+  JS_DefinePropertyGetSet(ctx, obj, atom,
+      JS_NewCFunction(ctx, element_get_className, "get_className", 0),
+      JS_NewCFunction(ctx, element_set_className, "set_className", 1),
+      JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+  JS_FreeAtom(ctx, atom);
+
+  // insertBefore method
+  JS_SetPropertyStr(ctx, obj, "insertBefore",
+      JS_NewCFunction(ctx, element_insertBefore, "insertBefore", 2));
+
+  // replaceChild method
+  JS_SetPropertyStr(ctx, obj, "replaceChild",
+      JS_NewCFunction(ctx, element_replaceChild, "replaceChild", 2));
+
+  // cloneNode method
+  JS_SetPropertyStr(ctx, obj, "cloneNode",
+      JS_NewCFunction(ctx, element_cloneNode, "cloneNode", 1));
+
+  // matches method
+  JS_SetPropertyStr(ctx, obj, "matches",
+      JS_NewCFunction(ctx, element_matches, "matches", 1));
+
+  // closest method
+  JS_SetPropertyStr(ctx, obj, "closest",
+      JS_NewCFunction(ctx, element_closest, "closest", 1));
+
+  // hasChildNodes method
+  JS_SetPropertyStr(ctx, obj, "hasChildNodes",
+      JS_NewCFunction(ctx, element_hasChildNodes, "hasChildNodes", 0));
+
+  // normalize method
+  JS_SetPropertyStr(ctx, obj, "normalize",
+      JS_NewCFunction(ctx, element_normalize, "normalize", 0));
+
+  // contains method
+  JS_SetPropertyStr(ctx, obj, "contains",
+      JS_NewCFunction(ctx, element_contains, "contains", 1));
+
+  // appendChild method
     JS_SetPropertyStr(
         ctx, obj, "appendChild",
         JS_NewCFunction(ctx, element_appendChild, "appendChild", 1));
@@ -818,9 +950,464 @@ private:
       return JS_EXCEPTION;
 
     std::string name = JSBinding::toStdString(ctx, argv[0]);
-    // TODO: Implement removeAttribute in dom.hpp
-    // For now, we'll skip, but we can at least indicate success
+    element->removeAttribute(name);
     return JS_UNDEFINED;
+  }
+
+  // classList.add(className)
+  static JSValue classList_add(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    for (int i = 0; i < argc; i++) {
+      std::string className = JSBinding::toStdString(ctx, argv[i]);
+      element->addClass(className);
+    }
+    return JS_UNDEFINED;
+  }
+
+  // classList.remove(className)
+  static JSValue classList_remove(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    for (int i = 0; i < argc; i++) {
+      std::string className = JSBinding::toStdString(ctx, argv[i]);
+      element->removeClass(className);
+    }
+    return JS_UNDEFINED;
+  }
+
+  // classList.toggle(className)
+  static JSValue classList_toggle(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string className = JSBinding::toStdString(ctx, argv[0]);
+    bool force = (argc > 1) ? JS_ToBool(ctx, argv[1]) : !element->hasClass(className);
+
+    if (force) {
+      element->addClass(className);
+      return JS_TRUE;
+    } else {
+      element->removeClass(className);
+      return JS_FALSE;
+    }
+  }
+
+  // classList.contains(className)
+  static JSValue classList_contains(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string className = JSBinding::toStdString(ctx, argv[0]);
+    return JS_NewBool(ctx, element->hasClass(className));
+  }
+
+  // element.parentNode getter
+  static JSValue element_get_parentNode(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    auto parent = element->parentNode();
+    if (parent && parent->nodeType() == dom::NodeType::Element) {
+      return wrapElement(ctx, std::static_pointer_cast<dom::Element>(parent).get());
+    }
+    return JS_NULL;
+  }
+
+  // element.childNodes getter (returns all child nodes including text nodes)
+  static JSValue element_get_childNodes(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    JSValue arr = JS_NewArray(ctx);
+    size_t index = 0;
+    for (const auto &child : element->childNodes()) {
+      if (child->nodeType() == dom::NodeType::Element) {
+        JS_DefinePropertyValueUint32(
+            ctx, arr, index++,
+            wrapElement(ctx, std::static_pointer_cast<dom::Element>(child).get()),
+            JS_PROP_WRITABLE | JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
+      } else if (child->nodeType() == dom::NodeType::Text) {
+        JS_DefinePropertyValueUint32(
+            ctx, arr, index++,
+            JSBinding::toJSString(ctx, child->textContent()),
+            JS_PROP_WRITABLE | JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
+      }
+    }
+    return arr;
+  }
+
+  // element.children getter (returns only element children)
+  static JSValue element_get_children(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    JSValue arr = JS_NewArray(ctx);
+    size_t index = 0;
+    for (const auto &child : element->childNodes()) {
+      if (child->nodeType() == dom::NodeType::Element) {
+        JS_DefinePropertyValueUint32(
+            ctx, arr, index++,
+            wrapElement(ctx, std::static_pointer_cast<dom::Element>(child).get()),
+            JS_PROP_WRITABLE | JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
+      }
+    }
+    return arr;
+  }
+
+  // element.firstElementChild getter
+  static JSValue element_get_firstElementChild(JSContext *ctx, JSValueConst this_val,
+                                             int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    auto child = element->firstElementChild();
+    if (child) {
+      return wrapElement(ctx, child.get());
+    }
+    return JS_NULL;
+  }
+
+  // element.lastElementChild getter
+  static JSValue element_get_lastElementChild(JSContext *ctx, JSValueConst this_val,
+                                            int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    auto child = element->lastElementChild();
+    if (child) {
+      return wrapElement(ctx, child.get());
+    }
+    return JS_NULL;
+  }
+
+  // element.nextElementSibling getter
+  static JSValue element_get_nextElementSibling(JSContext *ctx, JSValueConst this_val,
+                                               int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    auto sibling = element->nextElementSibling();
+    if (sibling) {
+      return wrapElement(ctx, sibling.get());
+    }
+    return JS_NULL;
+  }
+
+  // element.previousElementSibling getter
+  static JSValue element_get_previousElementSibling(JSContext *ctx, JSValueConst this_val,
+                                                   int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    auto sibling = element->previousElementSibling();
+    if (sibling) {
+      return wrapElement(ctx, sibling.get());
+    }
+    return JS_NULL;
+  }
+
+  // element.childElementCount getter
+  static JSValue element_get_childElementCount(JSContext *ctx, JSValueConst this_val,
+                                             int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    return JS_NewUint32(ctx, element->childElementCount());
+  }
+
+  // element.ownerDocument getter (returns the Document)
+  static JSValue element_get_ownerDocument(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    auto root = element->getRootNode();
+    if (root && root->nodeType() == dom::NodeType::Document) {
+      return wrapDocument(ctx, std::dynamic_pointer_cast<dom::Document>(root));
+    }
+    return JS_NULL;
+  }
+
+  // element.nodeType getter
+  static JSValue element_get_nodeType(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    return JS_NewUint32(ctx, static_cast<uint32_t>(dom::NodeType::Element));
+  }
+
+  // element.nodeName getter
+  static JSValue element_get_nodeName(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    return JSBinding::toJSString(ctx, element->tagName());
+  }
+
+  // element.className getter
+  static JSValue element_get_className(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    return JSBinding::toJSString(ctx, element->className());
+  }
+
+  // element.className setter
+  static JSValue element_set_className(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string className = JSBinding::toStdString(ctx, argv[0]);
+    element->setClassName(className);
+    return JS_UNDEFINED;
+  }
+
+  // element.insertBefore(newNode, refNode)
+  static JSValue element_insertBefore(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv) {
+    dom::Element *parent =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!parent)
+      return JS_EXCEPTION;
+    if (argc < 2)
+      return JS_EXCEPTION;
+
+    dom::Element *newNode =
+        (dom::Element *)JS_GetOpaque(argv[0], s_elementClassId);
+    dom::Element *refNode =
+        (dom::Element *)JS_GetOpaque(argv[1], s_elementClassId);
+    if (!newNode)
+      return JS_EXCEPTION;
+
+    try {
+      auto newNodePtr = newNode->shared_from_this();
+      dom::NodePtr refNodePtr;
+      if (refNode) {
+        refNodePtr = refNode->shared_from_this();
+      }
+      parent->insertBefore(newNodePtr, refNodePtr);
+    } catch (...) {
+      std::cout << "[DOM] Warning: insertBefore failed" << std::endl;
+      return JS_EXCEPTION;
+    }
+    return JS_DupValue(ctx, argv[0]);
+  }
+
+  // element.replaceChild(newNode, oldNode)
+  static JSValue element_replaceChild(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv) {
+    dom::Element *parent =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!parent)
+      return JS_EXCEPTION;
+    if (argc < 2)
+      return JS_EXCEPTION;
+
+    dom::Element *newNode =
+        (dom::Element *)JS_GetOpaque(argv[0], s_elementClassId);
+    dom::Element *oldNode =
+        (dom::Element *)JS_GetOpaque(argv[1], s_elementClassId);
+    if (!newNode || !oldNode)
+      return JS_EXCEPTION;
+
+    try {
+      auto newNodePtr = newNode->shared_from_this();
+      auto oldNodePtr = oldNode->shared_from_this();
+      parent->replaceChild(newNodePtr, oldNodePtr);
+    } catch (...) {
+      std::cout << "[DOM] Warning: replaceChild failed" << std::endl;
+      return JS_EXCEPTION;
+    }
+    return JS_DupValue(ctx, argv[1]);
+  }
+
+  // element.cloneNode(deep)
+  static JSValue element_cloneNode(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    bool deep = (argc > 0) ? JS_ToBool(ctx, argv[0]) : false;
+    auto cloned = element->cloneNode(deep);
+
+    if (cloned && cloned->nodeType() == dom::NodeType::Element) {
+      std::lock_guard<std::mutex> lock(s_mutex);
+      s_createdElements.push_back(
+          std::static_pointer_cast<dom::Element>(cloned));
+      return wrapElement(ctx, std::static_pointer_cast<dom::Element>(cloned).get());
+    }
+    return JS_NULL;
+  }
+
+  // element.matches(selector)
+  static JSValue element_matches(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string selector = JSBinding::toStdString(ctx, argv[0]);
+    return JS_NewBool(ctx, element->matches(selector));
+  }
+
+  // element.closest(selector)
+  static JSValue element_closest(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    std::string selector = JSBinding::toStdString(ctx, argv[0]);
+
+    dom::Element *current = element;
+    while (current) {
+      if (current->matches(selector)) {
+        return wrapElement(ctx, current);
+      }
+      auto parent = current->parentNode();
+      if (parent && parent->nodeType() == dom::NodeType::Element) {
+        current = std::static_pointer_cast<dom::Element>(parent).get();
+      } else {
+        break;
+      }
+    }
+    return JS_NULL;
+  }
+
+  // element.hasChildNodes()
+  static JSValue element_hasChildNodes(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    return JS_NewBool(ctx, element->hasChildNodes());
+  }
+
+  // element.normalize()
+  static JSValue element_normalize(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv) {
+    (void)argc;
+    (void)argv;
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+
+    element->normalize();
+    return JS_UNDEFINED;
+  }
+
+  // element.contains(other)
+  static JSValue element_contains(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv) {
+    dom::Element *element =
+        (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
+    if (!element)
+      return JS_EXCEPTION;
+    if (argc < 1)
+      return JS_EXCEPTION;
+
+    dom::Element *other =
+        (dom::Element *)JS_GetOpaque(argv[0], s_elementClassId);
+    if (!other)
+      return JS_FALSE;
+
+    try {
+      auto otherPtr = other->shared_from_this();
+      return JS_NewBool(ctx, element->contains(otherPtr));
+    } catch (...) {
+      return JS_FALSE;
+    }
   }
 };
 

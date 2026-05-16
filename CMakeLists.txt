@@ -280,6 +280,9 @@ if(ENABLE_FREETYPE)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
 endif()
 
+find_package(OpenSSL REQUIRED)
+target_link_libraries(xiaopengkernel_core PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+
 if(OPENGL_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${XPK_OPENGL_LIBRARIES})
     # Add OpenGL source files to core
@@ -716,6 +719,8 @@ target_link_libraries(test_dom_binding PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_dom_binding PRIVATE CURL_STATICLIB)
 target_link_libraries(test_dom_binding PRIVATE xiaopengkernel_core quickjs)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(test_dom_binding PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 set_target_properties(test_dom_binding PROPERTIES 
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
