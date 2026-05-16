@@ -239,7 +239,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 else()
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     ${CURL_LIBRARY}
-    curl
     pthread
 )
 endif()
