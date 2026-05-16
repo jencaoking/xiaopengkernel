@@ -426,6 +426,7 @@ list(FILTER TEST_SOURCES EXCLUDE REGEX "test_flexbox.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_flexbox_advanced.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_positioning.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_dom_binding.cpp")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_fetch.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_event.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_incremental.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_grid.cpp")
@@ -702,6 +703,39 @@ set_target_properties(test_dom_binding PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
 add_test(NAME DOMBindingTests COMMAND test_dom_binding)
+
+# Test Fetch API
+add_executable(test_fetch tests/test_fetch.cpp)
+target_include_directories(test_fetch PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(test_fetch PRIVATE "${CMAKE_SOURCE_DIR}/third_party/quickjs")
+target_compile_definitions(test_fetch PRIVATE ENABLE_QUICKJS)
+if(MINGW_BUILD)
+target_link_libraries(test_fetch PRIVATE 
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi bcrypt
+)
+else()
+target_link_libraries(test_fetch PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_fetch PRIVATE CURL_STATICLIB)
+target_link_libraries(test_fetch PRIVATE xiaopengkernel_core quickjs)
+set_target_properties(test_fetch PROPERTIES 
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME FetchTests COMMAND test_fetch)
 
 # Test Event System
 add_executable(test_event tests/test_event.cpp)

@@ -2367,7 +2367,116 @@ document.addEventListener("DOMContentLoaded", function(e) {
 document.dispatchEvent("DOMContentLoaded");
 ```
 
-### 4. Console 对象 (`console`)
+### 4. Fetch API
+
+XiaopengKernel 实现了 Web Fetch API，支持在 JavaScript 中发起网络请求。
+
+#### fetch(input[, init])
+
+发起网络请求，返回 Promise。
+
+```javascript
+// 基础 GET 请求
+fetch('https://api.example.com/data')
+    .then(response => response.json())
+    .then(data => console.log(data));
+
+// 带选项的 POST 请求
+fetch('https://api.example.com/submit', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name: 'test', value: 123 })
+}).then(response => {
+    console.log('Status:', response.status);
+    return response.json();
+});
+
+// 使用 async/await
+async function loadData() {
+    const response = await fetch('https://api.example.com/data');
+    const data = await response.json();
+    console.log(data);
+}
+```
+
+#### RequestInit 选项
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `method` | `string` | HTTP 方法 (GET, POST, PUT, DELETE, etc.) |
+| `headers` | `object/Headers` | 请求头 |
+| `body` | `string` | 请求体 |
+| `mode` | `string` | 请求模式 (cors, no-cors, same-origin) |
+| `credentials` | `string` | 凭证模式 (omit, same-origin, include) |
+| `cache` | `string` | 缓存模式 |
+| `redirect` | `string` | 重定向模式 (follow, error, manual) |
+
+#### Response 对象
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `status` | `number` | HTTP 状态码 |
+| `statusText` | `string` | 状态文本 |
+| `ok` | `boolean` | status 是否在 200-299 范围内 |
+| `headers` | `Headers` | 响应头对象 |
+| `url` | `string` | 响应 URL |
+| `redirected` | `boolean` | 是否经过重定向 |
+| `body` | `string/null` | 响应体 |
+| `bodyUsed` | `boolean` | body 是否已被消费 |
+
+#### Response 方法
+
+| 方法 | 返回类型 | 说明 |
+|------|----------|------|
+| `text()` | `Promise<string>` | 获取文本响应体 |
+| `json()` | `Promise<any>` | 解析 JSON 响应体 |
+| `arrayBuffer()` | `Promise<ArrayBuffer>` | 获取 ArrayBuffer 响应体 |
+| `blob()` | `Promise<Blob>` | 获取 Blob 响应体 |
+| `clone()` | `Response` | 克隆响应对象 |
+
+#### Headers 对象
+
+```javascript
+var headers = new Headers({
+    'Content-Type': 'application/json',
+    'X-Custom-Header': 'value'
+});
+
+// 获取 header
+headers.get('Content-Type');    // 'application/json'
+
+// 检查 header
+headers.has('X-Custom-Header'); // true
+
+// 设置 header
+headers.set('Accept', 'text/html');
+
+// 删除 header
+headers.delete('X-Custom-Header');
+
+// 遍历 headers
+headers.forEach((value, key) => {
+    console.log(key + ': ' + value);
+});
+```
+
+#### Headers 方法
+
+| 方法 | 返回类型 | 说明 |
+|------|----------|------|
+| `get(name)` | `string/null` | 获取指定名称的 header |
+| `has(name)` | `boolean` | 检查是否存在指定的 header |
+| `set(name, value)` | `void` | 设置 header 值 |
+| `append(name, value)` | `void` | 追加 header 值 |
+| `delete(name)` | `void` | 删除指定 header |
+| `keys()` | `Array` | 获取所有 header 名称 |
+| `values()` | `Array` | 获取所有 header 值 |
+| `entries()` | `Array` | 获取所有 [name, value] 键值对 |
+| `forEach(fn)` | `void` | 遍历所有 headers |
+
+### 5. Console 对象 (`console`)
 
 - `console.log(...)`: 打印普通日志。
 - `console.info(...)`: 打印信息日志。

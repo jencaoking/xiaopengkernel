@@ -1,5 +1,7 @@
 #include <iostream>
 #include <script/script_engine.hpp>
+#include <script/fetch_binding.hpp>
+#include <loader/http_client.hpp>
 #include <vector>
 
 namespace xiaopeng {
@@ -42,6 +44,8 @@ bool ScriptEngine::initialize() {
   ConsoleBinding::registerBinding(m_ctx);
   TimerBinding::registerBinding(m_ctx);
   DOMBinding::registerBinding(m_ctx);
+
+  FetchBinding::init(m_ctx, std::make_shared<loader::HttpClient>());
 
   return true;
 #else
