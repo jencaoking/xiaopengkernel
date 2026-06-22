@@ -641,7 +641,7 @@ set_target_properties(test_flexbox_advanced PROPERTIES
 add_test(NAME FlexboxAdvancedTests COMMAND test_flexbox_advanced)
 
 # Test Positioning
-add_executable(test_positioning tests/test_positioning.cpp)
+add_executable(test_positioning tests/test_positioning.cpp src/renderer/font_manager.cpp src/renderer/text_shaper.cpp)
 target_include_directories(test_positioning PRIVATE ${CMAKE_SOURCE_DIR}/include)
 if(MINGW_BUILD)
 target_link_libraries(test_positioning PRIVATE 
@@ -664,6 +664,9 @@ else()
 target_link_libraries(test_positioning PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_positioning PRIVATE CURL_STATICLIB)
+if(ENABLE_FREETYPE)
+    target_link_libraries(test_positioning PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
+endif()
 set_target_properties(test_positioning PROPERTIES 
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
@@ -697,6 +700,16 @@ target_link_libraries(test_dom_binding PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_dom_binding PRIVATE CURL_STATICLIB)
 target_link_libraries(test_dom_binding PRIVATE xiaopengkernel_core quickjs)
+if(ENABLE_FREETYPE)
+    target_link_libraries(test_dom_binding PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
+endif()
+if(EXISTS "${SDL2_ROOT}")
+    target_link_libraries(test_dom_binding PRIVATE mingw32 ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY} winmm gdi32 imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32 user32)
+    target_compile_definitions(test_dom_binding PRIVATE SDL_MAIN_HANDLED)
+endif()
+if(OPENGL_FOUND)
+    target_link_libraries(test_dom_binding PRIVATE ${XPK_OPENGL_LIBRARIES})
+endif()
 set_target_properties(test_dom_binding PROPERTIES 
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
@@ -730,6 +743,16 @@ target_link_libraries(test_event PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_event PRIVATE CURL_STATICLIB)
 target_link_libraries(test_event PRIVATE xiaopengkernel_core quickjs)
+if(ENABLE_FREETYPE)
+    target_link_libraries(test_event PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
+endif()
+if(EXISTS "${SDL2_ROOT}")
+    target_link_libraries(test_event PRIVATE mingw32 ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY} winmm gdi32 imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32 user32)
+    target_compile_definitions(test_event PRIVATE SDL_MAIN_HANDLED)
+endif()
+if(OPENGL_FOUND)
+    target_link_libraries(test_event PRIVATE ${XPK_OPENGL_LIBRARIES})
+endif()
 set_target_properties(test_event PROPERTIES 
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
@@ -761,6 +784,16 @@ target_link_libraries(test_incremental PRIVATE ${CURL_LIBRARY})
 endif()
 target_compile_definitions(test_incremental PRIVATE CURL_STATICLIB)
 target_link_libraries(test_incremental PRIVATE xiaopengkernel_core quickjs)
+if(ENABLE_FREETYPE)
+    target_link_libraries(test_incremental PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
+endif()
+if(EXISTS "${SDL2_ROOT}")
+    target_link_libraries(test_incremental PRIVATE mingw32 ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY} winmm gdi32 imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32 user32)
+    target_compile_definitions(test_incremental PRIVATE SDL_MAIN_HANDLED)
+endif()
+if(OPENGL_FOUND)
+    target_link_libraries(test_incremental PRIVATE ${XPK_OPENGL_LIBRARIES})
+endif()
 set_target_properties(test_incremental PROPERTIES 
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
