@@ -17,7 +17,7 @@ struct BoxFragment {
   float y = 0; // Relative to LineBox
   float width = 0;
   float height = 0;
-  float baseline = 0;     // Initialize to 0 to fix BUG-026
+  float baseline = 0;     // Baseline relative to fragment's top edge
   size_t startOffset = 0; // For text nodes: start index in text
   size_t endOffset = 0;   // For text nodes: end index in text
 };
@@ -29,8 +29,27 @@ public:
   void addFragment(BoxFragment fragment) {
     fragments_.push_back(fragment);
     width_ += fragment.width;
-    if (fragment.height > height_)
-      height_ = fragment.height;
+    
+    // Calculate max ascent and descent for baseline alignment
+    float ascent = fragment.baseline;
+    float descent = fragment.height - fragment.baseline;
+    
+    if (ascent > maxAscent_) {
+      maxAscent_ = ascent;
+    }
+    if (descent > maxDescent_) {
+      maxDescent_ = descent;
+    }
+    
+    // The height of the line box is determined by the max ascent and max descent
+    height_ = maxAscent_ + maxDescent_;
+  }
+
+  void finalizeAlignment() {
+    // Shift fragments vertically so their baselines align with the line's maxAscent
+    for (auto &fragment : fragments_) {
+      fragment.y = maxAscent_ - fragment.baseline;
+    }
   }
 
   const std::vector<BoxFragment> &fragments() const { return fragments_; }
@@ -40,6 +59,8 @@ public:
   float height() const { return height_; }
   float y() const { return y_; }
   void setY(float y) { y_ = y; }
+  
+  float baseline() const { return maxAscent_; }
 
   void setHeight(float h) { height_ = h; }
   void setWidth(float w) { width_ = w; }
@@ -55,6 +76,8 @@ private:
   float width_ = 0;
   float height_ = 0;
   float y_ = 0; // Relative to parent block content box
+  float maxAscent_ = 0;
+  float maxDescent_ = 0;
 };
 
 } // namespace layout

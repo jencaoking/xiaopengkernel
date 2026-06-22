@@ -12,7 +12,7 @@ class LayoutTreeBuilder {
 public:
   LayoutTreeBuilder(const css::StyleSheet &sheet) : sheet_(sheet) {}
 
-  LayoutBoxPtr build(dom::NodePtr node) {
+  LayoutBoxPtr build(dom::NodePtr node, const css::ComputedStyle *parentStyle = nullptr) {
     if (!node)
       return nullptr;
 
@@ -29,7 +29,7 @@ public:
 
         // <img> intrinsic sizing: read HTML width/height attributes
         if (element->localName() == "img") {
-          display = css::Display::Block; // Replaced elements act as blocks
+          display = css::Display::InlineBlock; // Replaced elements act as inline-blocks inside IFC
 
           // Read width attribute
           auto widthAttr = element->getAttribute("width");
@@ -65,8 +65,9 @@ public:
     } else if (node->nodeType() == dom::NodeType::Text) {
       // Text nodes inherit display context, treating as inline for now
       display = css::Display::Inline;
-      // Should inherit style from parent?
-      // For now, use default style for text nodes. real engines inherit.
+      if (parentStyle) {
+        style = *parentStyle;
+      }
     }
 
     // 2. Skip if display:none
@@ -88,7 +89,7 @@ public:
 
     // 4. Recurse for children
     for (auto child : node->childNodes()) {
-      auto childLayout = build(child);
+      auto childLayout = build(child, &style);
       if (childLayout) {
         // Anonymous box generation logic (simplified)
         if (layoutNode->type() == BoxType::BlockNode &&

@@ -578,6 +578,22 @@ private:
           style.position = Position::Fixed;
         else if (decl.value == "sticky")
           style.position = Position::Sticky;
+      } else if (decl.property == "float") {
+        if (decl.value == "left")
+          style.cssFloat = Float::Left;
+        else if (decl.value == "right")
+          style.cssFloat = Float::Right;
+        else
+          style.cssFloat = Float::None;
+      } else if (decl.property == "clear") {
+        if (decl.value == "left")
+          style.clear = Clear::Left;
+        else if (decl.value == "right")
+          style.clear = Clear::Right;
+        else if (decl.value == "both")
+          style.clear = Clear::Both;
+        else
+          style.clear = Clear::None;
       }
       // --- Grid Layout Properties ---
       else if (decl.property == "grid-template-columns") {

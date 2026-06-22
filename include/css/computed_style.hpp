@@ -105,6 +105,10 @@ enum class TextAlign { Left, Right, Center, Justify };
 
 enum class Overflow { Visible, Hidden, Scroll, Auto };
 
+enum class Float { None, Left, Right };
+
+enum class Clear { None, Left, Right, Both };
+
 enum class Isolation { Auto, Isolate };
 
 // Grid specific properties
@@ -253,6 +257,8 @@ struct ComputedStyle {
   TextAlign textAlign = TextAlign::Left;
   Overflow overflowX = Overflow::Visible;
   Overflow overflowY = Overflow::Visible;
+  Float cssFloat = Float::None;
+  Clear clear = Clear::None;
 
   std::unordered_map<std::string, CustomPropertyValue> customProperties;
 

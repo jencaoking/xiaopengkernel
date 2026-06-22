@@ -253,40 +253,55 @@ private:
     return hasInline;
   }
 
+  std::vector<LayoutBoxPtr> activeFloats_;
+
   void layoutBlock(LayoutBoxPtr box) {
-    // Standard Block Layout (Vertical Stacking)
     float currentY = 0;
 
-    // First pass: Layout non-positioned children
     for (auto child : box->children()) {
-      // Skip absolutely and fixed positioned elements for now
       if (child->style().position == css::Position::Absolute ||
           child->style().position == css::Position::Fixed) {
         continue;
       }
 
-      // Recursively layout child
       layoutBox(child, box->dimensions());
 
-      // Position child's CONTENT box relative to parent's BORDER box
-      child->dimensions().content.x =
-          box->dimensions().padding.left + child->dimensions().margin.left +
-          child->dimensions().border.left + child->dimensions().padding.left;
+      float childOuterWidth = child->dimensions().margin.left + child->dimensions().border.left +
+                              child->dimensions().padding.left + child->dimensions().content.width +
+                              child->dimensions().padding.right + child->dimensions().border.right +
+                              child->dimensions().margin.right;
+      float childOuterHeight = child->dimensions().margin.top + child->dimensions().border.top +
+                               child->dimensions().padding.top + child->dimensions().content.height +
+                               child->dimensions().padding.bottom + child->dimensions().border.bottom +
+                               child->dimensions().margin.bottom;
 
-      child->dimensions().content.y = box->dimensions().padding.top + currentY +
-                                      child->dimensions().margin.top +
-                                      child->dimensions().border.top +
-                                      child->dimensions().padding.top;
+      if (child->style().cssFloat == css::Float::Left) {
+        child->dimensions().content.x = box->dimensions().padding.left + child->dimensions().margin.left +
+                                        child->dimensions().border.left + child->dimensions().padding.left;
+        child->dimensions().content.y = box->dimensions().padding.top + currentY + child->dimensions().margin.top +
+                                        child->dimensions().border.top + child->dimensions().padding.top;
+        activeFloats_.push_back(child);
+      } else if (child->style().cssFloat == css::Float::Right) {
+        child->dimensions().content.x = box->dimensions().padding.left + box->dimensions().content.width - 
+                                        childOuterWidth + child->dimensions().margin.left +
+                                        child->dimensions().border.left + child->dimensions().padding.left;
+        child->dimensions().content.y = box->dimensions().padding.top + currentY + child->dimensions().margin.top +
+                                        child->dimensions().border.top + child->dimensions().padding.top;
+        activeFloats_.push_back(child);
+      } else {
+        child->dimensions().content.x =
+            box->dimensions().padding.left + child->dimensions().margin.left +
+            child->dimensions().border.left + child->dimensions().padding.left;
 
-      // Advance Y by child's full outer height
-      currentY +=
-          child->dimensions().margin.top + child->dimensions().border.top +
-          child->dimensions().padding.top + child->dimensions().content.height +
-          child->dimensions().padding.bottom +
-          child->dimensions().border.bottom + child->dimensions().margin.bottom;
+        child->dimensions().content.y = box->dimensions().padding.top + currentY +
+                                        child->dimensions().margin.top +
+                                        child->dimensions().border.top +
+                                        child->dimensions().padding.top;
+
+        currentY += childOuterHeight;
+      }
     }
 
-    // Second pass: Layout absolutely positioned children
     for (auto child : box->children()) {
       if (child->style().position == css::Position::Absolute) {
         LayoutBoxPtr containingBlock = findContainingBlock(child);
@@ -296,7 +311,6 @@ private:
       }
     }
 
-    // Third pass: Sort children by stacking context and z-index
     sortByZIndex(box);
   }
 
@@ -356,47 +370,115 @@ private:
     // For now, we'll assume the painter/renderer handles z-index ordering
   }
 
+  void collectInlineItems(LayoutBoxPtr box, std::vector<LayoutBoxPtr> &items) {
+    for (auto child : box->children()) {
+      if (child->type() == BoxType::InlineNode || child->type() == BoxType::AnonymousInline) {
+        collectInlineItems(child, items);
+      } else if (child->type() == BoxType::InlineBlockNode) {
+        items.push_back(child);
+      } else if (child->node() && child->node()->nodeType() == dom::NodeType::Text) {
+        items.push_back(child);
+      }
+    }
+  }
+
   void layoutInline(LayoutBoxPtr box) {
-    // Inline Formatting Context (Simple Line Breaking)
     box->lineBoxes().clear();
 
     LineBox currentLine;
-    // LineBox y is relative to parent's BORDER box.
-    // Base it on this box's content area start.
     currentLine.setY(box->dimensions().padding.top +
                      box->dimensions().border.top);
 
-    float contentWidth = box->dimensions().content.width;
+    float originalWidth = box->dimensions().content.width;
     float currentX = 0;
-    float lineHeight = 20.0f; // Default line height approximation reference
+    
+    // Calculate float offsets
+    float leftFloatWidth = 0;
+    float rightFloatWidth = 0;
+    
+    for (auto floatBox : activeFloats_) {
+       float floatOuterWidth = floatBox->dimensions().margin.left + floatBox->dimensions().border.left +
+                               floatBox->dimensions().padding.left + floatBox->dimensions().content.width +
+                               floatBox->dimensions().padding.right + floatBox->dimensions().border.right +
+                               floatBox->dimensions().margin.right;
+       if (floatBox->style().cssFloat == css::Float::Left) {
+           leftFloatWidth = std::max(leftFloatWidth, floatOuterWidth);
+       } else if (floatBox->style().cssFloat == css::Float::Right) {
+           rightFloatWidth = std::max(rightFloatWidth, floatOuterWidth);
+       }
+    }
+    
+    // Adjust available width and start X for the line
+    float contentWidth = originalWidth - leftFloatWidth - rightFloatWidth;
+    if (contentWidth < 0) contentWidth = 0;
+    
+    currentX = leftFloatWidth;
 
-    // Flatten inline children into a sequence of items to layout?
-    // Or iterate and handle.
-    // Simplifying assumption: We iterate direct children.
-    // If child is Text -> wrap words.
-    // If child is Element -> treat as atomic box for now (simplified).
+    std::vector<LayoutBoxPtr> inlineItems;
+    collectInlineItems(box, inlineItems);
 
-    for (auto child : box->children()) {
-      if (child->node() && child->node()->nodeType() == dom::NodeType::Text) {
-        layoutText(box, child, currentLine, currentX, contentWidth, lineHeight);
-      } else {
-        // layoutInlineElement(box, child, currentLine, currentX, contentWidth);
-        // For MVP, treat non-text inlines as 0-size or simple blocks?
-        // Let's recursively measure them?
-        // Inline elements (span) don't have width/height in same way.
-        // We need to recurse into them.
-        // But for "Simple Line Breaking", let's assume flat text for now plus
-        // simple atomic rendering.
+    for (auto item : inlineItems) {
+      if (item->type() == BoxType::InlineBlockNode) {
+        Dimensions parentDim;
+        parentDim.content.width = contentWidth; 
+        calculateBlockWidth(item, parentDim);
+        layoutBlock(item);
+        calculateBlockHeight(item);
+        
+        float itemWidth = item->dimensions().margin.left + 
+                          item->dimensions().border.left + 
+                          item->dimensions().padding.left + 
+                          item->dimensions().content.width +
+                          item->dimensions().padding.right + 
+                          item->dimensions().border.right + 
+                          item->dimensions().margin.right;
+                          
+        float itemHeight = item->dimensions().margin.top + 
+                           item->dimensions().border.top + 
+                           item->dimensions().padding.top + 
+                           item->dimensions().content.height +
+                           item->dimensions().padding.bottom + 
+                           item->dimensions().border.bottom + 
+                           item->dimensions().margin.bottom;
+                           
+        if (currentX + itemWidth > leftFloatWidth + contentWidth && currentX > leftFloatWidth) {
+          currentLine.finalizeAlignment();
+          box->addLineBox(currentLine);
+          
+          float nextY = currentLine.y() + currentLine.height();
+          currentLine = LineBox();
+          currentLine.setY(nextY);
+          currentX = leftFloatWidth;
+        }
+        
+        BoxFragment frag;
+        frag.box = item;
+        frag.x = currentX + item->dimensions().margin.left - leftFloatWidth; // Fragment x is relative to line start
+        frag.y = 0; 
+        frag.width = itemWidth - item->dimensions().margin.left - item->dimensions().margin.right;
+        frag.height = itemHeight - item->dimensions().margin.top - item->dimensions().margin.bottom;
+        frag.baseline = frag.height; 
+        
+        currentLine.addFragment(frag);
+        currentX += itemWidth;
+      } else if (item->node() && item->node()->nodeType() == dom::NodeType::Text) {
+        layoutText(box, item, currentLine, currentX, leftFloatWidth + contentWidth, leftFloatWidth);
       }
     }
 
-    // Add last line if not empty
     if (!currentLine.fragments().empty()) {
+      currentLine.finalizeAlignment();
       box->addLineBox(currentLine);
     }
 
-    // Apply text alignment to each line box
     applyTextAlignment(box, contentWidth);
+    
+    // Set height
+    float totalHeight = 0;
+    for (auto &lineBox : box->lineBoxes()) {
+      totalHeight += lineBox.height();
+    }
+    box->dimensions().content.height = totalHeight;
   }
 
   void applyTextAlignment(LayoutBoxPtr box, float contentWidth) {
@@ -404,22 +486,18 @@ private:
     if (style.textAlign == css::TextAlign::Left) return;
 
     for (auto &lineBox : box->lineBoxes()) {
-      // Calculate total used width
       float usedWidth = 0;
       for (const auto &fragment : lineBox.fragments()) {
         usedWidth = std::max(usedWidth, fragment.x + fragment.width);
       }
 
-      // Calculate offset for alignment
       float offset = 0;
       if (style.textAlign == css::TextAlign::Center) {
         offset = (contentWidth - usedWidth) / 2.0f;
       } else if (style.textAlign == css::TextAlign::Right) {
         offset = contentWidth - usedWidth;
       }
-      // Justify not implemented for simplicity
 
-      // Apply offset to all fragments in line
       if (offset > 0) {
         lineBox.shiftFragmentsX(offset);
       }
@@ -427,13 +505,11 @@ private:
   }
 
   void layoutText(LayoutBoxPtr parent, LayoutBoxPtr nodeBox,
-                  LineBox &currentLine, float &currentX, float maxWidth,
-                  float &lineHeight) {
+                  LineBox &currentLine, float &currentX, float maxWidth, float startX = 0) {
     if (!nodeBox || !nodeBox->node())
       return;
     const std::string &text = nodeBox->node()->textContent();
 
-    // Detect H1 for scaling (must match PaintingAlgorithm)
     float scale = 1.0f;
     if (nodeBox->node() && nodeBox->node()->parentNode() &&
         nodeBox->node()->parentNode()->nodeType() == dom::NodeType::Element) {
@@ -444,7 +520,6 @@ private:
       }
     }
 
-    // Font metrics
     std::string fontFamily = nodeBox->style().fontFamily;
     int fontSize = static_cast<int>(nodeBox->style().fontSize.value);
     if (fontSize <= 0)
@@ -453,62 +528,50 @@ private:
 
     auto &metrics = renderer::TextMetrics::instance();
     float spaceWidth = metrics.spaceWidth(fontFamily, fontSize);
-    lineHeight = metrics.lineHeight(fontFamily, fontSize);
+    float lineHeight = metrics.lineHeight(fontFamily, fontSize);
     if (lineHeight <= 0)
       lineHeight = 20.0f * scale;
-    currentLine.setHeight(lineHeight);
+
+    float textBaseline = lineHeight * 0.8f; // MVP: approximate baseline at 80%
 
     size_t pos = 0;
     while (pos < text.length()) {
-      // 1. Skip whitespace
-      while (pos < text.length() &&
-             std::isspace(static_cast<unsigned char>(text[pos]))) {
+      while (pos < text.length() && std::isspace(static_cast<unsigned char>(text[pos]))) {
         pos++;
       }
-      if (pos >= text.length())
-        break;
+      if (pos >= text.length()) break;
 
-      // 2. Find word end
       size_t startOffset = pos;
-      while (pos < text.length() &&
-             !std::isspace(static_cast<unsigned char>(text[pos]))) {
+      while (pos < text.length() && !std::isspace(static_cast<unsigned char>(text[pos]))) {
         pos++;
       }
       size_t endOffset = pos;
 
-      // Extract word for measurement (could be optimized)
-      // Length = endOffset - startOffset
       size_t wordLen = endOffset - startOffset;
-      float wordWidth = metrics
-                            .measureWord(text.substr(startOffset, wordLen),
-                                         fontFamily, fontSize)
-                            .width;
+      float wordWidth = metrics.measureWord(text.substr(startOffset, wordLen), fontFamily, fontSize).width;
 
-      // Check if word fits
-      if (currentX + wordWidth > maxWidth && currentX > 0) {
-        // New Line
+      if (currentX + wordWidth > maxWidth && currentX > startX) {
+        currentLine.finalizeAlignment();
         parent->addLineBox(currentLine);
         float prevY = currentLine.y();
         float prevH = currentLine.height();
 
-        currentLine = LineBox();         // Reset
-        currentLine.setY(prevY + prevH); // Next line Y
-        currentX = 0;
+        currentLine = LineBox();         
+        currentLine.setY(prevY + prevH); 
+        currentX = startX;
       }
 
-      // Add Fragment with CORRECT offsets
       BoxFragment fragment;
       fragment.box = nodeBox;
-      fragment.x = currentX;
-      fragment.y = 0; // Relative to LineBox top
+      fragment.x = currentX - startX;
+      fragment.y = 0;
       fragment.width = wordWidth;
-      fragment.height = static_cast<float>(fontSize); // Font size
+      fragment.height = lineHeight;
+      fragment.baseline = textBaseline;
       fragment.startOffset = startOffset;
       fragment.endOffset = endOffset;
 
       currentLine.addFragment(fragment);
-      currentLine.setHeight(std::max(currentLine.height(), fragment.height));
-
       currentX += wordWidth + spaceWidth;
     }
   }
