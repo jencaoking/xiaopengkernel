@@ -113,6 +113,7 @@ private:
 
   // Document state
   std::shared_ptr<dom::Document> m_document;
+  css::StyleSheet m_uaStylesheet; // Built-in default UA styles
   css::StyleSheet m_stylesheet;
   layout::LayoutBoxPtr m_layoutRoot;
   std::string m_baseUrl; // Resolved base URL for the current document

@@ -1,0 +1,22 @@
+[Engine] Loader initialized (network loading enabled)
+[SdlWindow] OpenGL context created successfully
+[Engine] Using OpenGL renderer
+[ParseThread] Worker thread started
+Loading file: test.html
+[Engine] Resolved base URL for file: file:///J:/PROJECT/xiaopengkernel/
+[Engine] Loading HTML (async)...
+[ParseThread] Parsing HTML (49 bytes)...
+[ParseThread] Collected 0 script(s) for main-thread execution
+[Engine] Parse complete 鈥?integrating results on main thread
+[Engine] Building Layout Tree...
+[Engine] Layout Tree Structure:
+  [Layout] BODY (Block)
+    [Layout] DIV (Block)
+      [Layout] #text (Inline)
+    [Layout] #text (Inline)
+[FontManager] FreeType initialized
+[FontManager] Loaded font: Arial from C:\Windows\Fonts\arial.ttf
+[FontManager] Default system font loaded
+[FontManager] Loaded font: serif from C:\Windows\Fonts\times.ttf
+[Engine] Layout calculated. Root size: 800x19 at (0,0)
+[Engine] Document ready

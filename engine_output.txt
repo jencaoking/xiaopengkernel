@@ -1,0 +1,40 @@
+[Engine] Loader initialized (network loading enabled)
+[SdlWindow] OpenGL context created successfully
+[Engine] Using OpenGL renderer
+[ParseThread] Worker thread started
+Loading default demo HTML...
+[Engine] Loading HTML (async)...
+[ParseThread] Parsing HTML (1479 bytes)...
+[ParseThread] Parsed 6 CSS rules
+[ParseThread] Collected 1 script(s) for main-thread execution
+[Engine] Parse complete â€?integrating results on main thread
+[JS Console] === BrowserEngine Integrated Test ===
+[JS Console] Click handler registered on #clickTarget
+[Engine] Building Layout Tree...
+[Engine] Layout Tree Structure:
+  [Layout] BODY (Block)
+    [Layout] #text (Inline)
+    [Layout] DIV (Block)
+      [Layout] #text (Inline)
+      [Layout] DIV (Block)
+      [Layout] #text (Inline)
+      [Layout] P (Block)
+        [Layout] #text (Inline)
+        [Layout] SPAN (Inline)
+          [Layout] #text (Inline)
+      [Layout] #text (Inline)
+      [Layout] P (Block)
+        [Layout] #text (Inline)
+        [Layout] SPAN (Inline)
+          [Layout] #text (Inline)
+      [Layout] #text (Inline)
+    [Layout] #text (Inline)
+    [Layout] SCRIPT (Inline)
+      [Layout] #text (Inline)
+    [Layout] #text (Inline)
+[FontManager] FreeType initialized
+[FontManager] Loaded font: Arial from C:\Windows\Fonts\arial.ttf
+[FontManager] Default system font loaded
+[FontManager] Loaded font: serif from C:\Windows\Fonts\times.ttf
+[Engine] Layout calculated. Root size: 800x221 at (0,0)
+[Engine] Document ready
