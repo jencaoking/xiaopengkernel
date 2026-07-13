@@ -38,6 +38,10 @@ std::vector<GlyphInfo> TextShaper::shape(const std::string &text,
 
   // Create HarfBuzz font from FreeType face
   hb_font_t *hbFont = hb_ft_font_create(font->ftFace, nullptr);
+  if (!hbFont) {
+    std::cerr << "[TextShaper] Failed to create HarfBuzz font" << std::endl;
+    return glyphs;
+  }
 
   hb_buffer_reset(buffer_);
   hb_buffer_add_utf8(buffer_, text.c_str(), -1, 0, -1);

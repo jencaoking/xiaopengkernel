@@ -1,4 +1,5 @@
 #include "renderer/image.hpp"
+#include <iostream>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_STDIO // We load from memory
@@ -13,6 +14,10 @@ Image::Image(const std::vector<uint8_t> &data) {
                                 &width_, &height_, &channels_, 4);
   if (data_) {
     channels_ = 4;
+  } else {
+    std::cerr << "[Image] Failed to decode image ("
+              << (stbi_failure_reason() ? stbi_failure_reason() : "unknown")
+              << ")" << std::endl;
   }
 }
 

@@ -214,11 +214,11 @@ private:
     RenderObjectPtr buildRenderTree(dom::NodePtr domNode, RenderObjectPtr parent) {
         if (!domNode) return nullptr;
 
-        // Skip non-element nodes (text, comment, etc. can be handled differently)
-        if (domNode->nodeType() != dom::NodeType::Element && 
-            domNode->nodeType() != dom::NodeType::Document) {
-            // For text nodes, we might want to create a text render object
-            // For simplicity, we'll skip them for now
+        // Skip non-renderable nodes (comments, doctypes, etc.). Element,
+        // Document and Text nodes are included so text content is rendered.
+        if (domNode->nodeType() != dom::NodeType::Element &&
+            domNode->nodeType() != dom::NodeType::Document &&
+            domNode->nodeType() != dom::NodeType::Text) {
             return nullptr;
         }
 

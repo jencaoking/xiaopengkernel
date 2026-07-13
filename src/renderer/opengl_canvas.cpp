@@ -136,7 +136,8 @@ void OpenGLCanvas::initializeOpenGL() {
   // Load OpenGL extensions
   loadOpenGLExtensions();
 
-  // Check if required extensions are available
+  // Check if required extensions are available. No GL objects have been
+  // created yet, so a plain return is safe here.
   if (!glGenFramebuffers || !glBindFramebuffer) {
     std::cerr << "Required OpenGL extensions not available" << std::endl;
     return;
@@ -144,6 +145,10 @@ void OpenGLCanvas::initializeOpenGL() {
 
   // Create framebuffer
   glGenFramebuffers(1, &framebuffer_);
+  if (framebuffer_ == 0) {
+    std::cerr << "Failed to generate framebuffer" << std::endl;
+    return;
+  }
   glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
 
   // Create renderbuffer for depth/stencil (optional)
@@ -155,6 +160,11 @@ void OpenGLCanvas::initializeOpenGL() {
 
   // Create texture for rendering
   glGenTextures(1, &texture_);
+  if (texture_ == 0) {
+    std::cerr << "Failed to generate texture" << std::endl;
+    cleanupOpenGL(); // Release framebuffer/renderbuffer already created
+    return;
+  }
   glBindTexture(GL_TEXTURE_2D, texture_);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width_, height_, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, nullptr);
@@ -167,10 +177,16 @@ void OpenGLCanvas::initializeOpenGL() {
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                          texture_, 0);
 
-  // Check framebuffer status
+  // Check framebuffer status. If incomplete, release all GL resources so the
+  // destructor and rendering code see a clean (zeroed) state instead of a
+  // half-initialized framebuffer.
   GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
   if (status != GL_FRAMEBUFFER_COMPLETE) {
     std::cerr << "Framebuffer incomplete: " << status << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    cleanupOpenGL();
+    return;
   }
 
   // Unbind

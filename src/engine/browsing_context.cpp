@@ -21,7 +21,7 @@ void BrowsingContext::pushState(const std::string &state,
 void BrowsingContext::replaceState(const std::string &state,
                                     const std::string &title,
                                     const std::string &url_str) {
-  if (m_currentIndex < 0) {
+  if (m_currentIndex < 0 || m_currentIndex >= (int)m_history.size()) {
     return;
   }
 
@@ -51,14 +51,14 @@ void BrowsingContext::back() { go(-1); }
 void BrowsingContext::forward() { go(1); }
 
 std::string BrowsingContext::getState() const {
-  if (m_currentIndex < 0) {
+  if (m_currentIndex < 0 || m_currentIndex >= (int)m_history.size()) {
     return "";
   }
   return m_history[m_currentIndex].state;
 }
 
 std::string BrowsingContext::getUrl() const {
-  if (m_currentIndex < 0) {
+  if (m_currentIndex < 0 || m_currentIndex >= (int)m_history.size()) {
     return "";
   }
   return m_history[m_currentIndex].url;
