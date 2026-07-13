@@ -139,23 +139,25 @@ inline bool matchNotEnhanced(dom::ElementPtr element,
   }
 
   // Compound: tag.class or tag#id
+  // matchNotEnhanced returns true if element MATCHES the inner selector.
+  // The caller (:not) will negate this.
   size_t dotPos = inner.find('.');
   size_t hashPos = inner.find('#');
   if (dotPos != std::string::npos) {
     std::string tag = inner.substr(0, dotPos);
     std::string cls = inner.substr(dotPos + 1);
-    return dom::toLower(element->localName()) != dom::toLower(tag) ||
-           !element->hasClass(cls);
+    return dom::toLower(element->localName()) == dom::toLower(tag) &&
+           element->hasClass(cls);
   }
   if (hashPos != std::string::npos) {
     std::string tag = inner.substr(0, hashPos);
     std::string id = inner.substr(hashPos + 1);
-    return dom::toLower(element->localName()) != dom::toLower(tag) ||
-           element->id() != id;
+    return dom::toLower(element->localName()) == dom::toLower(tag) &&
+           element->id() == id;
   }
 
   // Just a tag name
-  return dom::toLower(element->localName()) != dom::toLower(inner);
+  return dom::toLower(element->localName()) == dom::toLower(inner);
 }
 
 // ── New Pseudo-Class Matching ───────────────────────────────
