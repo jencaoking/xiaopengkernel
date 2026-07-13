@@ -1,9 +1,5 @@
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <string>
+#include "test_framework.hpp"
 
-// Include necessary headers
 #include "../include/css/computed_style.hpp"
 #include "../include/layout/layout_box.hpp"
 #include "../include/layout/flexbox_algorithm.hpp"
@@ -14,49 +10,39 @@ using namespace xiaopeng::css;
 using namespace xiaopeng::layout;
 using namespace xiaopeng::dom;
 
-int main() {
-  std::cout << "Testing Flexbox Implementation..." << std::endl;
+// ── Helpers ──────────────────────────────────────────────────
 
-  // Test 1: Create a flex container
-  ComputedStyle containerStyle;
-  containerStyle.display = Display::Flex;
-  containerStyle.width = Length::Px(500);
-  containerStyle.height = Length::Px(300);
-  containerStyle.flexDirection = FlexDirection::Row;
-  containerStyle.justifyContent = JustifyContent::SpaceBetween;
+static LayoutBoxPtr makeFlexContainer(FlexDirection dir = FlexDirection::Row,
+                                      JustifyContent justify = JustifyContent::FlexStart) {
+  ComputedStyle style;
+  style.display = Display::Flex;
+  style.flexDirection = dir;
+  style.justifyContent = justify;
+  style.width = Length::Px(800);
+  style.height = Length::Px(600);
+  return std::make_shared<LayoutBox>(BoxType::BlockNode, style, nullptr);
+}
 
-  // Create a flex container box
-  LayoutBoxPtr container = std::make_shared<LayoutBox>(
-    BoxType::BlockNode, containerStyle, nullptr);
+static LayoutBoxPtr makeFlexItem(float width, float height, float flexGrow = 0.0f) {
+  ComputedStyle style;
+  style.width = Length::Px(width);
+  style.height = Length::Px(height);
+  style.flexGrow = flexGrow;
+  return std::make_shared<LayoutBox>(BoxType::BlockNode, style, nullptr);
+}
 
-  // Test 2: Create flex items
-  ComputedStyle itemStyle1;
-  itemStyle1.width = Length::Px(100);
-  itemStyle1.height = Length::Px(50);
-  itemStyle1.flexGrow = 1.0f;
+// ── Tests ────────────────────────────────────────────────────
 
-  ComputedStyle itemStyle2;
-  itemStyle2.width = Length::Px(150);
-  itemStyle2.height = Length::Px(50);
-  itemStyle2.flexGrow = 2.0f;
-
-  ComputedStyle itemStyle3;
-  itemStyle3.width = Length::Px(80);
-  itemStyle3.height = Length::Px(50);
-  itemStyle3.flexGrow = 0.0f;
-
-  LayoutBoxPtr item1 = std::make_shared<LayoutBox>(
-    BoxType::BlockNode, itemStyle1, nullptr);
-  LayoutBoxPtr item2 = std::make_shared<LayoutBox>(
-    BoxType::BlockNode, itemStyle2, nullptr);
-  LayoutBoxPtr item3 = std::make_shared<LayoutBox>(
-    BoxType::BlockNode, itemStyle3, nullptr);
+TEST(Flexbox_RowBasic) {
+  auto container = makeFlexContainer(FlexDirection::Row);
+  auto item1 = makeFlexItem(100, 50);
+  auto item2 = makeFlexItem(150, 50);
+  auto item3 = makeFlexItem(80, 50);
 
   container->addChild(item1);
   container->addChild(item2);
   container->addChild(item3);
 
-  // Test 3: Run flexbox layout
   FlexboxAlgorithm flexbox;
   Dimensions parentDim;
   parentDim.content.width = 800;
@@ -64,73 +50,75 @@ int main() {
 
   flexbox.layoutFlexContainer(container, parentDim);
 
-  // Test 4: Verify results
-  std::cout << "Container dimensions: " 
-            << container->dimensions().content.width << "x" 
-            << container->dimensions().content.height << std::endl;
-
-  std::cout << "Item 1 position: (" 
-            << item1->dimensions().content.x << ", " 
-            << item1->dimensions().content.y << ")" 
-            << " size: " << item1->dimensions().content.width << "x" 
-            << item1->dimensions().content.height << std::endl;
-
-  std::cout << "Item 2 position: (" 
-            << item2->dimensions().content.x << ", " 
-            << item2->dimensions().content.y << ")" 
-            << " size: " << item2->dimensions().content.width << "x" 
-            << item2->dimensions().content.height << std::endl;
-
-  std::cout << "Item 3 position: (" 
-            << item3->dimensions().content.x << ", " 
-            << item3->dimensions().content.y << ")" 
-            << " size: " << item3->dimensions().content.width << "x" 
-            << item3->dimensions().content.height << std::endl;
-
-  // Test 5: Test column layout
-  std::cout << "\nTesting Column Layout..." << std::endl;
-  
-  ComputedStyle columnContainerStyle;
-  columnContainerStyle.display = Display::Flex;
-  columnContainerStyle.width = Length::Px(300);
-  columnContainerStyle.height = Length::Px(400);
-  columnContainerStyle.flexDirection = FlexDirection::Column;
-  columnContainerStyle.justifyContent = JustifyContent::Center;
-
-  LayoutBoxPtr columnContainer = std::make_shared<LayoutBox>(
-    BoxType::BlockNode, columnContainerStyle, nullptr);
-
-  ComputedStyle columnItemStyle;
-  columnItemStyle.width = Length::Px(100);
-  columnItemStyle.height = Length::Px(40);
-  columnItemStyle.flexGrow = 1.0f;
-
-  LayoutBoxPtr columnItem1 = std::make_shared<LayoutBox>(
-    BoxType::BlockNode, columnItemStyle, nullptr);
-  LayoutBoxPtr columnItem2 = std::make_shared<LayoutBox>(
-    BoxType::BlockNode, columnItemStyle, nullptr);
-
-  columnContainer->addChild(columnItem1);
-  columnContainer->addChild(columnItem2);
-
-  flexbox.layoutFlexContainer(columnContainer, parentDim);
-
-  std::cout << "Column container dimensions: " 
-            << columnContainer->dimensions().content.width << "x" 
-            << columnContainer->dimensions().content.height << std::endl;
-
-  std::cout << "Column item 1 position: (" 
-            << columnItem1->dimensions().content.x << ", " 
-            << columnItem1->dimensions().content.y << ")" 
-            << " size: " << columnItem1->dimensions().content.width << "x" 
-            << columnItem1->dimensions().content.height << std::endl;
-
-  std::cout << "Column item 2 position: (" 
-            << columnItem2->dimensions().content.x << ", " 
-            << columnItem2->dimensions().content.y << ")" 
-            << " size: " << columnItem2->dimensions().content.width << "x" 
-            << columnItem2->dimensions().content.height << std::endl;
-
-  std::cout << "\nFlexbox test completed successfully!" << std::endl;
-  return 0;
+  // Items should be laid out horizontally
+  EXPECT_EQ(container->children().size(), 3u);
+  EXPECT_GT(item1->dimensions().content.width, 0.0f);
+  EXPECT_GT(item2->dimensions().content.width, 0.0f);
+  EXPECT_GT(item3->dimensions().content.width, 0.0f);
 }
+
+TEST(Flexbox_RowWithFlexGrow) {
+  auto container = makeFlexContainer(FlexDirection::Row);
+  auto item1 = makeFlexItem(100, 50, 1.0f);
+  auto item2 = makeFlexItem(150, 50, 2.0f);
+  auto item3 = makeFlexItem(80, 50, 0.0f);
+
+  container->addChild(item1);
+  container->addChild(item2);
+  container->addChild(item3);
+
+  FlexboxAlgorithm flexbox;
+  Dimensions parentDim;
+  parentDim.content.width = 800;
+  parentDim.content.height = 600;
+
+  flexbox.layoutFlexContainer(container, parentDim);
+
+  // item2 should be larger than item1 due to higher flexGrow
+  float w1 = item1->dimensions().content.width;
+  float w2 = item2->dimensions().content.width;
+  EXPECT_GT(w2, w1);
+}
+
+TEST(Flexbox_ColumnBasic) {
+  auto container = makeFlexContainer(FlexDirection::Column);
+  auto item1 = makeFlexItem(100, 40);
+  auto item2 = makeFlexItem(100, 40);
+
+  container->addChild(item1);
+  container->addChild(item2);
+
+  FlexboxAlgorithm flexbox;
+  Dimensions parentDim;
+  parentDim.content.width = 800;
+  parentDim.content.height = 600;
+
+  flexbox.layoutFlexContainer(container, parentDim);
+
+  // Items should be stacked vertically
+  EXPECT_GT(item1->dimensions().content.y, 0.0f);
+  EXPECT_GT(item2->dimensions().content.y, item1->dimensions().content.y);
+}
+
+TEST(Flexbox_ColumnWithFlexGrow) {
+  auto container = makeFlexContainer(FlexDirection::Column);
+  auto item1 = makeFlexItem(100, 40, 1.0f);
+  auto item2 = makeFlexItem(100, 40, 2.0f);
+
+  container->addChild(item1);
+  container->addChild(item2);
+
+  FlexboxAlgorithm flexbox;
+  Dimensions parentDim;
+  parentDim.content.width = 300;
+  parentDim.content.height = 400;
+
+  flexbox.layoutFlexContainer(container, parentDim);
+
+  // item2 should be taller than item1 due to higher flexGrow
+  float h1 = item1->dimensions().content.height;
+  float h2 = item2->dimensions().content.height;
+  EXPECT_GT(h2, h1);
+}
+
+int main() { return xiaopeng::test::runTests(); }
