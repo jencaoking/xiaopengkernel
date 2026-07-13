@@ -60,11 +60,18 @@ static int g_passed = 0;
 static dom::Document buildSelectorTestDOM() {
   dom::Document doc;
 
+  // Wrap in <html><body> so Document::getElementById() works
+  // (getElementById delegates to documentElement() which requires <html>)
+  auto html = doc.createElement("html");
+  doc.appendChild(html);
+  auto body = doc.createElement("body");
+  html->appendChild(body);
+
   auto main = doc.createElement("div");
   main->setId("main");
   main->setClassName("container");
   main->setAttribute("data-role", "primary");
-  doc.appendChild(main);
+  body->appendChild(main);
 
   auto p1 = doc.createElement("p");
   p1->setId("p1");
