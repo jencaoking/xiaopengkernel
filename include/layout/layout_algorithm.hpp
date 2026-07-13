@@ -385,7 +385,19 @@ private:
   void layoutInline(LayoutBoxPtr box) {
     box->lineBoxes().clear();
 
-    LineBox currentLine;
+    // Calculate the parent block's line-height strut so that every line
+    // (including those containing only short inline-blocks) has at least
+    // the correct minimum height.
+    auto &textMetrics = renderer::TextMetrics::instance();
+    std::string boxFontFamily = box->style().fontFamily;
+    int boxFontSize = static_cast<int>(box->style().fontSize.value);
+    if (boxFontSize <= 0)
+      boxFontSize = 16;
+    float strutHeight = textMetrics.lineHeight(boxFontFamily, boxFontSize);
+    if (strutHeight <= 0)
+      strutHeight = 20.0f;
+
+    LineBox currentLine(strutHeight);
     currentLine.setY(box->dimensions().padding.top +
                      box->dimensions().border.top);
 
@@ -441,12 +453,16 @@ private:
                            item->dimensions().border.bottom + 
                            item->dimensions().margin.bottom;
                            
-        if (currentX + itemWidth > leftFloatWidth + contentWidth && currentX > leftFloatWidth) {
+        // Wrap to a new line if the inline-block doesn't fit.
+        // Use !fragments().empty() instead of currentX > leftFloatWidth
+        // so that an empty line (e.g. after text-indent) is not wrapped.
+        if (currentX + itemWidth > leftFloatWidth + contentWidth &&
+            !currentLine.fragments().empty()) {
           currentLine.finalizeAlignment();
           box->addLineBox(currentLine);
           
           float nextY = currentLine.y() + currentLine.height();
-          currentLine = LineBox();
+          currentLine = LineBox(strutHeight);
           currentLine.setY(nextY);
           currentX = leftFloatWidth;
         }
@@ -462,7 +478,7 @@ private:
         currentLine.addFragment(frag);
         currentX += itemWidth;
       } else if (item->node() && item->node()->nodeType() == dom::NodeType::Text) {
-        layoutText(box, item, currentLine, currentX, leftFloatWidth + contentWidth, leftFloatWidth);
+        layoutText(box, item, currentLine, currentX, leftFloatWidth + contentWidth, leftFloatWidth, strutHeight);
       }
     }
 
@@ -505,7 +521,8 @@ private:
   }
 
   void layoutText(LayoutBoxPtr parent, LayoutBoxPtr nodeBox,
-                  LineBox &currentLine, float &currentX, float maxWidth, float startX = 0) {
+                  LineBox &currentLine, float &currentX, float maxWidth,
+                  float startX = 0, float strutHeight = 0) {
     if (!nodeBox || !nodeBox->node())
       return;
     const std::string &text = nodeBox->node()->textContent();
@@ -534,12 +551,50 @@ private:
 
     float textBaseline = lineHeight * 0.8f; // MVP: approximate baseline at 80%
 
+    // Determine white-space handling from the parent block style.
+    auto ws = parent->style().whiteSpace;
+    bool preserveWhitespace =
+        (ws == css::WhiteSpace::Pre || ws == css::WhiteSpace::PreWrap);
+    bool canWrap =
+        (ws == css::WhiteSpace::Normal || ws == css::WhiteSpace::PreWrap);
+
     size_t pos = 0;
     while (pos < text.length()) {
-      while (pos < text.length() && std::isspace(static_cast<unsigned char>(text[pos]))) {
-        pos++;
+      // Handle whitespace runs
+      if (std::isspace(static_cast<unsigned char>(text[pos]))) {
+        size_t runStart = pos;
+        bool hasNewline = false;
+        while (pos < text.length() &&
+               std::isspace(static_cast<unsigned char>(text[pos]))) {
+          if (text[pos] == '\n')
+            hasNewline = true;
+          pos++;
+        }
+        size_t runLen = pos - runStart;
+
+        if (preserveWhitespace && hasNewline) {
+          // Hard line break for pre/pre-wrap
+          currentLine.finalizeAlignment();
+          parent->addLineBox(currentLine);
+          float nextY = currentLine.y() + currentLine.height();
+          currentLine = LineBox(strutHeight);
+          currentLine.setY(nextY);
+          currentX = startX;
+          continue;
+        }
+
+        if (preserveWhitespace) {
+          // Preserve the whitespace run for pre/pre-wrap, advancing
+          // currentX even when the line has no content yet so that
+          // leading spaces are not dropped.
+          currentX += spaceWidth * static_cast<float>(runLen);
+        }
+        // For normal/nowrap, whitespace is collapsed (skip it)
+        continue;
       }
-      if (pos >= text.length()) break;
+
+      if (pos >= text.length())
+        break;
 
       size_t startOffset = pos;
       while (pos < text.length() && !std::isspace(static_cast<unsigned char>(text[pos]))) {
@@ -550,14 +605,17 @@ private:
       size_t wordLen = endOffset - startOffset;
       float wordWidth = metrics.measureWord(text.substr(startOffset, wordLen), fontFamily, fontSize).width;
 
-      if (currentX + wordWidth > maxWidth && currentX > startX) {
+      // Use !fragments().empty() instead of currentX > startX so that
+      // an empty line (e.g. after text-indent) is not wrapped.
+      if (canWrap && currentX + wordWidth > maxWidth &&
+          !currentLine.fragments().empty()) {
         currentLine.finalizeAlignment();
         parent->addLineBox(currentLine);
         float prevY = currentLine.y();
         float prevH = currentLine.height();
 
-        currentLine = LineBox();         
-        currentLine.setY(prevY + prevH); 
+        currentLine = LineBox(strutHeight);
+        currentLine.setY(prevY + prevH);
         currentX = startX;
       }
 

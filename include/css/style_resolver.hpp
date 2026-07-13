@@ -594,6 +594,15 @@ private:
           style.clear = Clear::Both;
         else
           style.clear = Clear::None;
+      } else if (decl.property == "white-space") {
+        if (decl.value == "pre")
+          style.whiteSpace = WhiteSpace::Pre;
+        else if (decl.value == "pre-wrap")
+          style.whiteSpace = WhiteSpace::PreWrap;
+        else if (decl.value == "nowrap")
+          style.whiteSpace = WhiteSpace::Nowrap;
+        else
+          style.whiteSpace = WhiteSpace::Normal;
       }
       // --- Grid Layout Properties ---
       else if (decl.property == "grid-template-columns") {

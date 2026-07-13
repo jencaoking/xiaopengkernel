@@ -107,6 +107,8 @@ enum class Overflow { Visible, Hidden, Scroll, Auto };
 
 enum class Float { None, Left, Right };
 
+enum class WhiteSpace { Normal, Pre, PreWrap, Nowrap };
+
 enum class Clear { None, Left, Right, Both };
 
 enum class Isolation { Auto, Isolate };
@@ -259,6 +261,7 @@ struct ComputedStyle {
   Overflow overflowY = Overflow::Visible;
   Float cssFloat = Float::None;
   Clear clear = Clear::None;
+  WhiteSpace whiteSpace = WhiteSpace::Normal;
 
   std::unordered_map<std::string, CustomPropertyValue> customProperties;
 

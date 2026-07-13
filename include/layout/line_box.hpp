@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -25,6 +26,9 @@ struct BoxFragment {
 class LineBox {
 public:
   LineBox() = default;
+  explicit LineBox(float strutHeight) : strutHeight_(strutHeight) {
+    height_ = strutHeight;
+  }
 
   void addFragment(BoxFragment fragment) {
     fragments_.push_back(fragment);
@@ -41,8 +45,9 @@ public:
       maxDescent_ = descent;
     }
     
-    // The height of the line box is determined by the max ascent and max descent
-    height_ = maxAscent_ + maxDescent_;
+    // The height of the line box is determined by the max ascent and max descent,
+    // but never smaller than the strut (line-height) established by the parent block.
+    height_ = std::max(maxAscent_ + maxDescent_, strutHeight_);
   }
 
   void finalizeAlignment() {
@@ -64,6 +69,7 @@ public:
 
   void setHeight(float h) { height_ = h; }
   void setWidth(float w) { width_ = w; }
+  void setStrutHeight(float h) { strutHeight_ = h; }
 
   void shiftFragmentsX(float offset) {
     for (auto &fragment : fragments_) {
@@ -78,6 +84,7 @@ private:
   float y_ = 0; // Relative to parent block content box
   float maxAscent_ = 0;
   float maxDescent_ = 0;
+  float strutHeight_ = 0;
 };
 
 } // namespace layout
