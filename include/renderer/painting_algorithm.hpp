@@ -7,6 +7,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "renderer/paint_layer.hpp"
+
 namespace xiaopeng {
 namespace renderer {
 
@@ -18,16 +20,13 @@ public:
   void clearImageCache() { imageCache_.clear(); }
 
 private:
-  struct PaintItem {
-    layout::LayoutBoxPtr box;
-    int parentBorderBoxX;
-    int parentBorderBoxY;
-  };
-
-  void collectPaintItems(layout::LayoutBoxPtr box, int parentX, int parentY,
-                         std::vector<PaintItem> &items);
-  void paintBox(layout::LayoutBoxPtr box, Canvas &canvas, int globalX,
-                int globalY);
+  PaintLayerPtr buildLayerTree(layout::LayoutBoxPtr root);
+  void collectLayers(layout::LayoutBoxPtr box, PaintLayerPtr currentLayer);
+  
+  void paintLayer(PaintLayerPtr layer, Canvas &canvas, int parentX, int parentY);
+  void paintNormalFlow(layout::LayoutBoxPtr box, Canvas &canvas, int parentX, int parentY);
+  void paintBox(layout::LayoutBoxPtr box, Canvas &canvas, int parentBorderBoxX, int parentBorderBoxY);
+  void getParentBorderBox(layout::LayoutBoxPtr box, int& px, int& py);
 
   // Heuristic to determine color based on element type/class for visualization
   Color getColorForBox(layout::LayoutBoxPtr box);

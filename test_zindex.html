@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { margin: 20px; }
+    .box {
+      width: 150px;
+      height: 150px;
+      position: absolute;
+      border: 2px solid black;
+      text-align: center;
+      line-height: 150px;
+      font-weight: bold;
+    }
+    .parent1 {
+      top: 50px;
+      left: 50px;
+      background-color: rgba(255, 0, 0, 0.8);
+      z-index: 5;
+    }
+    .parent2 {
+      top: 150px;
+      left: 150px;
+      background-color: rgba(0, 0, 255, 0.8);
+      z-index: 10;
+    }
+    .child-of-parent1 {
+      top: 50px;
+      left: 50px;
+      width: 100px;
+      height: 100px;
+      background-color: rgba(0, 255, 0, 0.9);
+      position: absolute;
+      /* Extremely high z-index, but should STILL be UNDER parent2 
+         because parent1 has z-index 5 and parent2 has z-index 10 */
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stacking Context Test</h1>
+  
+  <div class="box parent1">
+    Parent 1 (Z: 5)
+    <div class="child-of-parent1">Child (Z: 9999)</div>
+  </div>
+  
+  <div class="box parent2">
+    Parent 2 (Z: 10)
+  </div>
+
+  <p style="margin-top: 350px;">
+    <strong>Expected Result:</strong> The green child box has a z-index of 9999, but its parent (red) has a z-index of 5. The blue box has a z-index of 10. <br/>
+    Because the red box creates a Stacking Context, its children are confined to its layer. <br/>
+    Therefore, the <strong>blue box MUST be on top</strong> of both the red box AND the green box.
+  </p>
+</body>
+</html>

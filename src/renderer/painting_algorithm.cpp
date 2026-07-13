@@ -16,48 +16,75 @@ void PaintingAlgorithm::paint(layout::LayoutBoxPtr root, Canvas &canvas) {
   // Paint background
   canvas.clear(Color::White());
 
-  // Collect all paint items and sort by z-index
-  std::vector<PaintItem> paintItems;
-  collectPaintItems(root, 0, 0, paintItems);
+  auto rootLayer = buildLayerTree(root);
+  paintLayer(rootLayer, canvas, 0, 0);
+}
 
-  // Sort items by z-index (ascending, so lower z-index draws first, higher later)
-  std::sort(paintItems.begin(), paintItems.end(),
-            [](const PaintItem &a, const PaintItem &b) {
-              int zA = a.box->style().zIndex;
-              int zB = b.box->style().zIndex;
+PaintLayerPtr PaintingAlgorithm::buildLayerTree(layout::LayoutBoxPtr root) {
+  auto rootLayer = std::make_shared<PaintLayer>(root);
+  collectLayers(root, rootLayer);
+  return rootLayer;
+}
 
-              // Auto z-index is treated as 0
-              if (zA == 0 && zB == 0) {
-                // Stable sort: keep original tree order
-                return false;
-              }
-              return zA < zB;
-            });
-
-  // Paint in sorted order
-  for (const auto &item : paintItems) {
-    paintBox(item.box, canvas, item.parentBorderBoxX, item.parentBorderBoxY);
+void PaintingAlgorithm::collectLayers(layout::LayoutBoxPtr box, PaintLayerPtr currentLayer) {
+  for (const auto &child : box->children()) {
+    if (PaintLayer::createsStackingContext(child)) {
+      auto childLayer = std::make_shared<PaintLayer>(child);
+      currentLayer->addStackingContextChild(childLayer);
+      collectLayers(child, childLayer);
+    } else {
+      currentLayer->addNormalFlowChild(child);
+      collectLayers(child, currentLayer);
+    }
   }
 }
 
-void PaintingAlgorithm::collectPaintItems(layout::LayoutBoxPtr box, int parentX,
-                                           int parentY, std::vector<PaintItem> &items) {
-  // Add this box to paint list
-  items.push_back({box, parentX, parentY});
-
-  // Calculate this box's border box position for children
-  const auto &dims = box->dimensions();
-  int contentAbsX = parentX + static_cast<int>(dims.content.x);
-  int contentAbsY = parentY + static_cast<int>(dims.content.y);
-  int borderBoxX = contentAbsX - static_cast<int>(dims.padding.left) -
-                   static_cast<int>(dims.border.left);
-  int borderBoxY = contentAbsY - static_cast<int>(dims.padding.top) -
-                   static_cast<int>(dims.border.top);
-
-  // Recursively collect children
-  for (const auto &child : box->children()) {
-    collectPaintItems(child, borderBoxX, borderBoxY, items);
+void PaintingAlgorithm::getParentBorderBox(layout::LayoutBoxPtr box, int& px, int& py) {
+  if (!box || !box->parent().lock()) {
+    px = 0; py = 0; return;
   }
+  auto parent = box->parent().lock();
+  int ppx = 0, ppy = 0;
+  getParentBorderBox(parent, ppx, ppy);
+  
+  const auto &pDims = parent->dimensions();
+  int pContentAbsX = ppx + static_cast<int>(pDims.content.x);
+  int pContentAbsY = ppy + static_cast<int>(pDims.content.y);
+  px = pContentAbsX - static_cast<int>(pDims.padding.left) - static_cast<int>(pDims.border.left);
+  py = pContentAbsY - static_cast<int>(pDims.padding.top) - static_cast<int>(pDims.border.top);
+}
+
+void PaintingAlgorithm::paintLayer(PaintLayerPtr layer, Canvas &canvas, int dummyX, int dummyY) {
+  layer->sortNegZOrderList();
+  layer->sortPosZOrderList();
+
+  auto box = layer->box();
+  int px = 0, py = 0;
+  getParentBorderBox(box, px, py);
+
+  // 1. Paint background and borders of this layer's element
+  paintBox(box, canvas, px, py);
+
+  // 2. Paint child layers with negative z-index
+  for (const auto &childLayer : layer->negZOrderList()) {
+    paintLayer(childLayer, canvas, 0, 0);
+  }
+
+  // 3. Paint normal flow children
+  for (const auto &childBox : layer->normalFlowChildren()) {
+    paintNormalFlow(childBox, canvas, 0, 0);
+  }
+
+  // 4. Paint child layers with positive (or zero) z-index
+  for (const auto &childLayer : layer->posZOrderList()) {
+    paintLayer(childLayer, canvas, 0, 0);
+  }
+}
+
+void PaintingAlgorithm::paintNormalFlow(layout::LayoutBoxPtr box, Canvas &canvas, int dummyX, int dummyY) {
+  int px = 0, py = 0;
+  getParentBorderBox(box, px, py);
+  paintBox(box, canvas, px, py);
 }
 
 void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,

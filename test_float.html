@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: Arial;
+      margin: 20px;
+    }
+    .container {
+      border: 2px solid black;
+      padding: 10px;
+      width: 400px;
+      background-color: #f0f0f0;
+    }
+    .left-float {
+      float: left;
+      width: 100px;
+      height: 100px;
+      background-color: #ffcccc;
+      border: 2px solid red;
+      margin: 5px;
+    }
+    .right-float {
+      float: right;
+      width: 100px;
+      height: 100px;
+      background-color: #ccffcc;
+      border: 2px solid green;
+      margin: 5px;
+    }
+    .text {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Float & Wrap Test</h1>
+  <div class="container">
+    <div class="left-float">Left Float</div>
+    <div class="right-float">Right Float</div>
+    <div class="text">
+      This is some text that should wrap around the floating elements. 
+      The left floating box should be on the left side of this text, 
+      and the right floating box should be on the right side of this text.
+      If the float implementation is correct, this text will be perfectly
+      sandwiched between the two boxes, demonstrating our basic float avoidance
+      algorithm in the Inline Formatting Context. Awesome!
+    </div>
+  </div>
+</body>
+</html>
