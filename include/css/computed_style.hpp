@@ -103,6 +103,44 @@ enum class BoxSizing { ContentBox, BorderBox };
 
 enum class TextAlign { Left, Right, Center, Justify };
 
+/// vertical-align for inline-level boxes.
+/// - Baseline: default; align box baseline with parent's strut baseline
+/// - Top/Bottom: align with top/bottom of line box
+/// - Middle: center on parent's baseline + half x-height
+/// - TextTop/TextBottom: align with top/bottom of parent's font
+/// - Sub/Super: shift down/up by a fraction of font-size
+enum class VerticalAlign {
+  Baseline,
+  Top,
+  Bottom,
+  Middle,
+  TextTop,
+  TextBottom,
+  Sub,
+  Super
+};
+
+/// white-space controls whitespace collapsing and line wrapping.
+enum class WhiteSpace {
+  Normal,    // collapse sequences, wrap as needed (default)
+  Pre,       // preserve, do not wrap
+  NoWrap,    // collapse, do not wrap
+  PreWrap,   // preserve, wrap as needed
+  PreLine    // collapse newlines to space, preserve newlines, wrap
+};
+
+/// line-height: how to compute the height of a line box for text content.
+struct LineHeight {
+  enum class Mode { Normal, Number, Length, Percent };
+  Mode mode = Mode::Normal;
+  float value = 0.0f; // For Number: multiplier of font-size.
+                      // For Length: px value. For Percent: % of font-size.
+  static LineHeight Normal() { return {Mode::Normal, 0.0f}; }
+  static LineHeight Number(float n) { return {Mode::Number, n}; }
+  static LineHeight Length(float px) { return {Mode::Length, px}; }
+  static LineHeight Percent(float p) { return {Mode::Percent, p}; }
+};
+
 enum class Overflow { Visible, Hidden, Scroll, Auto };
 
 enum class Float { None, Left, Right };
@@ -199,6 +237,10 @@ struct ComputedStyle {
   // Typography (simplified)
   Length fontSize = Length::Px(16);
   std::string fontFamily = "serif";
+  LineHeight lineHeight = LineHeight::Normal();
+  Length textIndent = Length::Px(0);
+  WhiteSpace whiteSpace = WhiteSpace::Normal;
+  VerticalAlign verticalAlign = VerticalAlign::Baseline;
 
   // Generic storage for other properties
   std::unordered_map<std::string, std::string> otherProperties;
