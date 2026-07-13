@@ -280,8 +280,7 @@ public:
   static void cleanup() {
     std::lock_guard<std::mutex> lock(s_mutex);
     s_createdElements.clear();
-    // Free any stored document shared_ptrs
-    // (In practice the engine owns them, but be tidy)
+    s_createdNodes.clear();
   }
 
 private:
@@ -292,6 +291,7 @@ private:
   static JSClassID s_textNodeClassId;
 
   static inline std::vector<std::weak_ptr<dom::Element>> s_createdElements;
+  static inline std::vector<dom::NodePtr> s_createdNodes; // BUG FIX: track all created nodes
   static inline std::mutex s_mutex;
 
   // ── Helper: get Node* from either element or text class ──
@@ -448,6 +448,8 @@ private:
     auto *doc = getDoc(ctx, this_val);
     if (!doc || argc < 1) return JS_EXCEPTION;
     auto node = doc->createTextNode(JSBinding::toStdString(ctx, argv[0]));
+    if (!node) return JS_NULL;
+    { std::lock_guard<std::mutex> lock(s_mutex); s_createdNodes.push_back(node); }
     return wrapTextNode(ctx, static_cast<dom::TextNode *>(node.get()));
   }
 
@@ -458,13 +460,13 @@ private:
     auto *doc = getDoc(ctx, this_val);
     if (!doc) return JS_EXCEPTION;
     auto frag = doc->createDocumentFragment();
-    // Fragments are containers; wrap as a lightweight element-like object
-    JSValue obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, obj, "nodeType", JS_NewInt32(ctx, 11)); // DOCUMENT_FRAGMENT_NODE
+    if (!frag) return JS_NULL;
+    JSValue obj = JS_NewObjectClass(ctx, s_elementClassId);
+    if (JS_IsException(obj)) return obj;
+    JS_SetOpaque(obj, static_cast<dom::Node *>(frag.get()));
+    { std::lock_guard<std::mutex> lock(s_mutex); s_createdNodes.push_back(frag); }
+    JS_SetPropertyStr(ctx, obj, "nodeType", JS_NewInt32(ctx, 11));
     JS_SetPropertyStr(ctx, obj, "nodeName", JS_NewString(ctx, "#document-fragment"));
-    // Store opaque for appendChild to work
-    // Note: We need a class for this, but for simplicity use a generic approach
-    JS_SetPropertyStr(ctx, obj, "___isFragment", JS_TRUE);
     return obj;
   }
 
@@ -474,8 +476,12 @@ private:
     auto *doc = getDoc(ctx, this_val);
     if (!doc || argc < 1) return JS_EXCEPTION;
     auto node = doc->createComment(JSBinding::toStdString(ctx, argv[0]));
-    JSValue obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, obj, "nodeType", JS_NewInt32(ctx, 8)); // COMMENT_NODE
+    if (!node) return JS_NULL;
+    { std::lock_guard<std::mutex> lock(s_mutex); s_createdNodes.push_back(node); }
+    JSValue obj = JS_NewObjectClass(ctx, s_elementClassId);
+    if (JS_IsException(obj)) return obj;
+    JS_SetOpaque(obj, static_cast<dom::Node *>(node.get()));
+    JS_SetPropertyStr(ctx, obj, "nodeType", JS_NewInt32(ctx, 8));
     JS_SetPropertyStr(ctx, obj, "nodeName", JS_NewString(ctx, "#comment"));
     JS_SetPropertyStr(ctx, obj, "data",
                       JSBinding::toJSString(ctx, JSBinding::toStdString(ctx, argv[0])));
