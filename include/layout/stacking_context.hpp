@@ -62,13 +62,13 @@ public:
 
     // 2. Position absolute/relative with z-index != auto
     //    (auto means "use parent context's z-index", not 0)
-    if ((style.position == css::Position::Relative ||
-         style.position == css::Position::Absolute) &&
-        style.zIndex != 0) {
-      // Note: z-index auto is represented as a special value.
-      // In our ComputedStyle, zIndex defaults to 0.
-      // A true "auto" would need a separate flag. For now,
-      // any non-zero z-index on positioned elements creates a context.
+    // Positioned elements with any z-index create stacking context.
+    // CSS spec: z-index:auto does NOT create context, but z-index:0 DOES.
+    // Our ComputedStyle uses int with default 0. Since we cannot distinguish
+    // "auto" from "0" without an extra flag, we treat all positioned elements
+    // as creating a context (safe over-approximation).
+    if (style.position == css::Position::Relative ||
+        style.position == css::Position::Absolute) {
       return true;
     }
 
