@@ -204,6 +204,17 @@ public:
     }                                                                          \
   } while (0)
 
+#define EXPECT_LE(a, b)                                                        \
+  do {                                                                         \
+    if (!((a) <= (b))) {                                                       \
+      std::ostringstream oss;                                                  \
+      oss << "EXPECT_LE failed: " << #a << " > " << #b;                        \
+      xiaopeng::test::TestRunner::instance().fail(oss.str(), __FILE__,         \
+                                                  __LINE__);                   \
+      return;                                                                  \
+    }                                                                          \
+  } while (0)
+
 #define ASSERT_TRUE(condition) EXPECT_TRUE(condition)
 #define ASSERT_FALSE(condition) EXPECT_FALSE(condition)
 #define ASSERT_EQ(a, b) EXPECT_EQ(a, b)

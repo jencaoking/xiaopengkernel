@@ -381,6 +381,38 @@ private:
         style.fontSize = parseLength(decl.value);
       } else if (decl.property == "font-family") {
         style.fontFamily = decl.value;
+      } else if (decl.property == "line-height") {
+        style.lineHeight = parseLineHeight(decl.value);
+      } else if (decl.property == "text-indent") {
+        style.textIndent = parseLength(decl.value);
+      } else if (decl.property == "white-space") {
+        if (decl.value == "normal")
+          style.whiteSpace = WhiteSpace::Normal;
+        else if (decl.value == "pre")
+          style.whiteSpace = WhiteSpace::Pre;
+        else if (decl.value == "nowrap")
+          style.whiteSpace = WhiteSpace::NoWrap;
+        else if (decl.value == "pre-wrap")
+          style.whiteSpace = WhiteSpace::PreWrap;
+        else if (decl.value == "pre-line")
+          style.whiteSpace = WhiteSpace::PreLine;
+      } else if (decl.property == "vertical-align") {
+        if (decl.value == "baseline")
+          style.verticalAlign = VerticalAlign::Baseline;
+        else if (decl.value == "top")
+          style.verticalAlign = VerticalAlign::Top;
+        else if (decl.value == "bottom")
+          style.verticalAlign = VerticalAlign::Bottom;
+        else if (decl.value == "middle")
+          style.verticalAlign = VerticalAlign::Middle;
+        else if (decl.value == "text-top")
+          style.verticalAlign = VerticalAlign::TextTop;
+        else if (decl.value == "text-bottom")
+          style.verticalAlign = VerticalAlign::TextBottom;
+        else if (decl.value == "sub")
+          style.verticalAlign = VerticalAlign::Sub;
+        else if (decl.value == "super")
+          style.verticalAlign = VerticalAlign::Super;
       } else if (decl.property == "flex-direction") {
         if (decl.value == "row")
           style.flexDirection = FlexDirection::Row;
@@ -726,6 +758,27 @@ private:
     if (val.find("%") != std::string::npos)
       return Length::Percent(f);
     return Length::Px(f);
+  }
+
+  /// Parse the CSS `line-height` value into a `LineHeight` descriptor.
+  /// Supports: normal | <number> | <length>px | <percentage>%
+  LineHeight parseLineHeight(const std::string &val) {
+    if (val == "normal" || val.empty())
+      return LineHeight::Normal();
+
+    float f = 0.0f;
+    try {
+      f = std::stof(val);
+    } catch (const std::exception &) {
+      return LineHeight::Normal();
+    }
+
+    if (val.find("%") != std::string::npos)
+      return LineHeight::Percent(f);
+    if (val.find("px") != std::string::npos)
+      return LineHeight::Length(f);
+    // Unitless number — multiplied by font-size at use time.
+    return LineHeight::Number(f);
   }
 
   Color parseColor(std::string val) {

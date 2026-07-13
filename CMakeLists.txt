@@ -432,6 +432,8 @@ list(FILTER TEST_SOURCES EXCLUDE REGEX "test_grid.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_stacking.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_event_loop.cpp")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "test_page_lifecycle.cpp")
+# test_ifc has its own main() and is built as a standalone executable below.
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_ifc.cpp")
 
 add_executable(loader_tests ${TEST_SOURCES})
 
@@ -667,11 +669,44 @@ target_compile_definitions(test_positioning PRIVATE CURL_STATICLIB)
 if(ENABLE_FREETYPE)
     target_link_libraries(test_positioning PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
 endif()
-set_target_properties(test_positioning PROPERTIES 
+set_target_properties(test_positioning PROPERTIES
     WIN32_EXECUTABLE FALSE
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
 add_test(NAME PositioningTests COMMAND test_positioning)
+
+# Test Inline Formatting Context (IFC)
+add_executable(test_ifc tests/test_ifc.cpp src/renderer/font_manager.cpp src/renderer/text_shaper.cpp)
+target_include_directories(test_ifc PRIVATE ${CMAKE_SOURCE_DIR}/include)
+if(MINGW_BUILD)
+target_link_libraries(test_ifc PRIVATE
+    ${CURL_ROOT}/lib/libcurl.a
+    ${CURL_ROOT}/lib/libnghttp2.a
+    ${CURL_ROOT}/lib/libnghttp3.a
+    ${CURL_ROOT}/lib/libngtcp2.a
+    ${CURL_ROOT}/lib/libngtcp2_crypto_quictls.a
+    ${CURL_ROOT}/lib/libssl.a
+    ${CURL_ROOT}/lib/libcrypto.a
+    ${CURL_ROOT}/lib/libssh2.a
+    ${CURL_ROOT}/lib/libz.a
+    ${CURL_ROOT}/lib/libzstd.a
+    ${CURL_ROOT}/lib/libbrotlidec.a
+    ${CURL_ROOT}/lib/libbrotlicommon.a
+    ${CURL_ROOT}/lib/libpsl.a
+    ws2_32 crypt32 wldap32 secur32 normaliz shlwapi iphlpapi bcrypt
+)
+else()
+target_link_libraries(test_ifc PRIVATE ${CURL_LIBRARY})
+endif()
+target_compile_definitions(test_ifc PRIVATE CURL_STATICLIB)
+if(ENABLE_FREETYPE)
+    target_link_libraries(test_ifc PRIVATE ${FREETYPE_LIBRARIES} stdc++ $<$<BOOL:${MINGW_BUILD}>:rpcrt4>)
+endif()
+set_target_properties(test_ifc PROPERTIES
+    WIN32_EXECUTABLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+)
+add_test(NAME IFCTests COMMAND test_ifc)
 
 # Test DOM Binding
 add_executable(test_dom_binding tests/test_dom_binding.cpp)
