@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -95,8 +96,8 @@ private:
 
   Config m_config;
   bool m_initialized = false;
-  bool m_needsLayout = false;
-  bool m_needsPaint = false;
+  std::atomic<bool> m_needsLayout{false};
+  std::atomic<bool> m_needsPaint{false};
   EngineState m_state = EngineState::Idle;
 
   // Async parsing infrastructure
