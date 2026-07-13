@@ -112,22 +112,22 @@ inline bool matchNotEnhanced(dom::ElementPtr element,
 
   // Simple single selector
   if (inner[0] == '.') {
-    return element->hasClass(inner.substr(1));
+    return !element->hasClass(inner.substr(1));
   }
   if (inner[0] == '#') {
-    return element->id() == inner.substr(1);
+    return element->id() != inner.substr(1);
   }
   if (inner[0] == '[') {
     // Parse [attr] or [attr=val]
     std::string content = inner.substr(1, inner.size() - 2);
     size_t eqPos = content.find('=');
     if (eqPos == std::string::npos) {
-      return element->hasAttribute(content);
+      return !element->hasAttribute(content);
     }
     std::string name = content.substr(0, eqPos);
     std::string val = content.substr(eqPos + 1);
     auto attrVal = element->getAttribute(name);
-    return attrVal.has_value() && attrVal.value() == val;
+    return !attrVal.has_value() || attrVal.value() != val;
   }
   if (inner[0] == ':') {
     // Pseudo-class — simplified: check common ones
@@ -157,7 +157,7 @@ inline bool matchNotEnhanced(dom::ElementPtr element,
   }
 
   // Just a tag name
-  return dom::toLower(element->localName()) == dom::toLower(inner);
+  return dom::toLower(element->localName()) != dom::toLower(inner);
 }
 
 // ── New Pseudo-Class Matching ───────────────────────────────
