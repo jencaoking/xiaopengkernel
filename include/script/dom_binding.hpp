@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm> // For std::find_if
 #include <cstring> // For memset
 #include <dom/dom.hpp>
 #include <dom/html_parser.hpp>
@@ -42,14 +43,23 @@ public:
     JSClassDef elementDef;
     memset(&elementDef, 0, sizeof(JSClassDef));
     elementDef.class_name = "Element";
-    elementDef.finalizer = [](JSRuntime *, JSValue) {};
+    elementDef.finalizer = [](JSRuntime *, JSValue val) {
+      // Elements are managed by s_createdElements, no action needed here
+    };
     JS_NewClass(JS_GetRuntime(ctx), s_elementClassId, &elementDef);
 
     // Document class
     JSClassDef docDef;
     memset(&docDef, 0, sizeof(JSClassDef));
     docDef.class_name = "Document";
-    docDef.finalizer = [](JSRuntime *, JSValue) {};
+    docDef.finalizer = [](JSRuntime *, JSValue val) {
+      // Properly release the shared_ptr<Document> stored in opaque
+      auto* doc_ptr = static_cast<std::shared_ptr<dom::Document>*>(JS_GetOpaque(val, s_documentClassId));
+      if (doc_ptr) {
+        delete doc_ptr;
+        JS_SetOpaque(val, nullptr);
+      }
+    };
     JS_NewClass(JS_GetRuntime(ctx), s_documentClassId, &docDef);
 
     // NodeList class
@@ -81,11 +91,13 @@ public:
     if (JS_IsException(obj))
       return obj;
 
-    JS_SetOpaque(obj, doc.get());
+    // Store shared_ptr<Document>* in opaque for proper lifetime management
+    // The finalizer will delete this pointer
+    auto* doc_ptr = new std::shared_ptr<dom::Document>(doc);
+    JS_SetOpaque(obj, doc_ptr);
 
-    // Store shared_ptr to keep document alive
-    JS_SetPropertyStr(ctx, obj, "___doc_ptr",
-                      JS_NewBigUint64(ctx, (uint64_t)new std::shared_ptr<dom::Document>(doc)));
+    // Store raw pointer for convenience (not owned)
+    // JS_SetOpaque(obj, doc.get()); // This line removed - we now use shared_ptr*
 
     // --- Methods ---
     auto bind = [&](const char *name, JSCFunction func, int argc) {
@@ -290,8 +302,9 @@ private:
   static JSClassID s_classListClassId;
   static JSClassID s_textNodeClassId;
 
-  static inline std::vector<std::weak_ptr<dom::Element>> s_createdElements;
-  static inline std::vector<dom::NodePtr> s_createdNodes; // BUG FIX: track all created nodes
+  // Use shared_ptr to properly extend element lifetime
+  static inline std::vector<std::shared_ptr<dom::Element>> s_createdElements;
+  static inline std::vector<dom::NodePtr> s_createdNodes;
   static inline std::mutex s_mutex;
 
   // ── Helper: get Node* from either element or text class ──
@@ -302,6 +315,28 @@ private:
     if (!node)
       node = (dom::Node *)JS_GetOpaque(this_val, s_documentClassId);
     return node;
+  }
+
+  // ── Helper: remove element from temporary storage when added to DOM ──
+  static void removeElementFromStorage(dom::Element *element) {
+    if (!element) return;
+    std::lock_guard<std::mutex> lock(s_mutex);
+    auto it = std::find_if(s_createdElements.begin(), s_createdElements.end(),
+                           [element](const auto& ptr) { return ptr.get() == element; });
+    if (it != s_createdElements.end()) {
+      s_createdElements.erase(it);
+    }
+  }
+
+  // ── Helper: remove node from temporary storage when added to DOM ──
+  static void removeNodeFromStorage(dom::Node *node) {
+    if (!node) return;
+    std::lock_guard<std::mutex> lock(s_mutex);
+    auto it = std::find_if(s_createdNodes.begin(), s_createdNodes.end(),
+                           [node](const auto& ptr) { return ptr.get() == node; });
+    if (it != s_createdNodes.end()) {
+      s_createdNodes.erase(it);
+    }
   }
 
   // ── Helper: bind read-only getter ──
@@ -376,7 +411,8 @@ private:
   // ══════════════════════════════════════════════════════════
 
   static dom::Document *getDoc(JSContext *ctx, JSValueConst this_val) {
-    return (dom::Document *)JS_GetOpaque(this_val, s_documentClassId);
+    auto* doc_ptr = static_cast<std::shared_ptr<dom::Document>*>(JS_GetOpaque(this_val, s_documentClassId));
+    return doc_ptr ? doc_ptr->get() : nullptr;
   }
 
   // document.getElementById(id)
@@ -431,13 +467,6 @@ private:
     {
       std::lock_guard<std::mutex> lock(s_mutex);
       s_createdElements.push_back(el);
-      if (s_createdElements.size() > 100) {
-        auto it = s_createdElements.begin();
-        while (it != s_createdElements.end()) {
-          if (it->expired()) it = s_createdElements.erase(it);
-          else ++it;
-        }
-      }
     }
     return wrapElement(ctx, el.get());
   }
@@ -1037,6 +1066,8 @@ private:
     if (child) {
       try {
         parent->appendChild(child->shared_from_this());
+        // Element is now part of DOM tree, can be removed from temporary storage
+        removeElementFromStorage(child);
       } catch (...) {
         std::cout << "[DOM] Warning: appendChild failed" << std::endl;
         return JS_EXCEPTION;
@@ -1049,6 +1080,8 @@ private:
     if (textChild) {
       try {
         parent->appendChild(textChild->shared_from_this());
+        // TextNode is now part of DOM tree, can be removed from temporary storage
+        removeNodeFromStorage(textChild);
       } catch (...) {
         std::cout << "[DOM] Warning: appendChild (text) failed" << std::endl;
         return JS_EXCEPTION;
@@ -1350,8 +1383,11 @@ private:
     std::string type = JSBinding::toStdString(ctx, argv[0]);
     auto it = node->eventListenerIds_.find(type);
     if (it != node->eventListenerIds_.end()) {
+      // Copy the listener IDs to prevent iterator invalidation
+      // if callbacks modify the listener list during dispatch
+      std::vector<uint32_t> listenerIdsCopy = it->second;
       JSValue eventObj = EventBinding::createEventObject(ctx, type);
-      EventBinding::dispatch(ctx, it->second, eventObj);
+      EventBinding::dispatch(ctx, listenerIdsCopy, eventObj);
       JS_FreeValue(ctx, eventObj);
     }
     return JS_UNDEFINED;
