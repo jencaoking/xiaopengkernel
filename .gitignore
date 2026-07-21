@@ -52,3 +52,4 @@ Desktop.ini
 
 # QuickJS specific (if generated)
 quickjs/examples/*.txt
+.mimocode
