@@ -49,6 +49,19 @@ private:
   std::vector<Token> tokens_;
   size_t position_;
 
+  // Format a number without excessive trailing zeros
+  static std::string formatNumber(double n) {
+    if (n == static_cast<int64_t>(n)) {
+      return std::to_string(static_cast<int64_t>(n));
+    }
+    std::string s = std::to_string(n);
+    // Remove trailing zeros
+    s.erase(s.find_last_not_of('0') + 1, std::string::npos);
+    if (s.back() == '.')
+      s.pop_back();
+    return s;
+  }
+
   Token peek() const {
     if (position_ >= tokens_.size())
       return {TokenType::EndOfFile};
@@ -272,22 +285,77 @@ private:
             part.value = consume().value;
             gotPart = true;
           } else if (peek().is(TokenType::Function)) {
-            part.value = consume().value;
-            consumeUntil(
-                TokenType::CloseParen); // Skip function arguments for now
-            consume();
+            std::string funcName = consume().value;
+            std::string args;
+
+            // Collect function arguments (inline token reconstruction)
+            while (position_ < tokens_.size() &&
+                   !peek().is(TokenType::CloseParen) &&
+                   !peek().is(TokenType::EndOfFile)) {
+              Token arg = consume();
+              if (arg.is(TokenType::Whitespace)) {
+                if (!args.empty() && args.back() != ' ')
+                  args += " ";
+              } else if (arg.is(TokenType::Comma)) {
+                args += ",";
+              } else if (arg.is(TokenType::Ident) || arg.is(TokenType::Delim)) {
+                args += arg.value;
+              } else if (arg.is(TokenType::Number)) {
+                args += formatNumber(arg.numberValue);
+              } else if (arg.is(TokenType::Percentage)) {
+                args += formatNumber(arg.numberValue) + "%";
+              } else if (arg.is(TokenType::Dimension)) {
+                args += formatNumber(arg.numberValue) + arg.unit;
+              } else {
+                args += arg.value;
+              }
+            }
+            if (peek().is(TokenType::CloseParen)) {
+              consume(); // )
+            }
+            part.value = funcName + "(" + args + ")";
             gotPart = true;
           }
         } else if (t.is(TokenType::OpenSquare)) {
           consume(); // [
           part.type = SelectorType::Attribute;
+          consumeWhitespace();
           if (peek().is(TokenType::Ident)) {
             part.attributeName = consume().value;
-            // Optional operator and value... skipped for brevity
-            consumeUntil(TokenType::CloseSquare);
-            consume(); // ]
-            gotPart = true;
+            consumeWhitespace();
+
+            // Parse optional operator: =, ~=, |=, ^=, $=, *=
+            if (peek().is(TokenType::Delim)) {
+              std::string op;
+              std::string delim = peek().value;
+              if (delim == "~" || delim == "|" || delim == "^" || delim == "$" ||
+                  delim == "*") {
+                op = consume().value;
+                if (peek().is(TokenType::Delim) && peek().value == "=") {
+                  op += consume().value; // e.g. "~="
+                } else {
+                  // Lone ~ | ^ $ * without = — treat as missing operator
+                  op.clear();
+                }
+              } else if (delim == "=") {
+                op = consume().value; // "="
+              }
+              if (!op.empty()) {
+                part.attributeOperator = op;
+                consumeWhitespace();
+                // Parse the attribute value (Ident or String)
+                if (peek().is(TokenType::Ident) ||
+                    peek().is(TokenType::String)) {
+                  part.attributeValue = consume().value;
+                  consumeWhitespace();
+                }
+              }
+            }
           }
+          consumeUntil(TokenType::CloseSquare);
+          if (peek().is(TokenType::CloseSquare))
+            consume(); // ]
+          gotPart = true;
         } else {
           break; // Not a selector part
         }
@@ -377,11 +445,11 @@ private:
           } else if (arg.is(TokenType::Comma)) {
             decl.value += ",";
           } else if (arg.is(TokenType::Number)) {
-            decl.value += std::to_string(arg.numberValue);
+            decl.value += formatNumber(arg.numberValue);
           } else if (arg.is(TokenType::Percentage)) {
-            decl.value += std::to_string(arg.numberValue) + "%";
+            decl.value += formatNumber(arg.numberValue) + "%";
           } else if (arg.is(TokenType::Dimension)) {
-            decl.value += std::to_string(arg.numberValue) + arg.unit;
+            decl.value += formatNumber(arg.numberValue) + arg.unit;
           } else if (arg.is(TokenType::Ident)) {
             decl.value += arg.value;
           } else if (arg.is(TokenType::Delim)) {
@@ -398,11 +466,11 @@ private:
         decl.value += "url(" + t.value + ")";
       } else if (t.is(TokenType::Dimension)) {
         decl.value +=
-            std::to_string(t.numberValue) + t.unit; // Rough reconstruction
+            formatNumber(t.numberValue) + t.unit; // Rough reconstruction
       } else if (t.is(TokenType::Number)) {
-        decl.value += std::to_string(t.numberValue);
+        decl.value += formatNumber(t.numberValue);
       } else if (t.is(TokenType::Percentage)) {
-        decl.value += std::to_string(t.numberValue) + "%";
+        decl.value += formatNumber(t.numberValue) + "%";
       } else if (t.is(TokenType::Hash)) {
         decl.value += "#" + t.value;
       } else if (t.is(TokenType::Ident)) {

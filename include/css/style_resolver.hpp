@@ -42,14 +42,19 @@ public:
     std::sort(matches.begin(), matches.end(),
               [](const MatchResult &a, const MatchResult &b) {
                 if (a.specificity != b.specificity) {
-                  return a.specificity < b.specificity; // Sort ascending
+                  return a.specificity < b.specificity;
                 }
                 return a.position < b.position;
               });
 
-    // 3. Apply declarations
+    // 3. Apply non-important declarations first (sorted by specificity)
     for (const auto &match : matches) {
-      applyDeclarations(style, match.rule->declarations);
+      applyDeclarations(style, match.rule->declarations, false);
+    }
+
+    // 4. Apply !important declarations last (they always override non-important)
+    for (const auto &match : matches) {
+      applyDeclarations(style, match.rule->declarations, true);
     }
 
     return style;
@@ -162,12 +167,45 @@ private:
     case SelectorType::Universal:
       return true;
     case SelectorType::Attribute:
-      if (simple.value.empty()) {
+      if (simple.attributeOperator.empty() && simple.attributeValue.empty()) {
         return element->hasAttribute(simple.attributeName);
       } else {
         auto val = element->getAttribute(simple.attributeName);
-        return val.has_value() && val.value() == simple.attributeValue;
-        // Operator support would be here
+        if (!val.has_value()) return false;
+        const std::string &op = simple.attributeOperator;
+        const std::string &attrVal = simple.attributeValue;
+        if (op == "=")
+          return val.value() == attrVal;
+        if (op == "~=") {
+          std::string haystack = val.value();
+          size_t pos = 0;
+          while (pos < haystack.size()) {
+            size_t end = haystack.find_first_of(" \t\n", pos);
+            if (end == std::string::npos) end = haystack.size();
+            if (haystack.substr(pos, end - pos) == attrVal) return true;
+            pos = end + 1;
+          }
+          return false;
+        }
+        if (op == "|=") {
+          const std::string &v = val.value();
+          return v == attrVal ||
+                 (v.size() > attrVal.size() &&
+                  v.substr(0, attrVal.size()) == attrVal &&
+                  v[attrVal.size()] == '-');
+        }
+        if (op == "^=") {
+          return val.value().size() >= attrVal.size() &&
+                 val.value().substr(0, attrVal.size()) == attrVal;
+        }
+        if (op == "$=") {
+          return val.value().size() >= attrVal.size() &&
+                 val.value().substr(val.value().size() - attrVal.size()) == attrVal;
+        }
+        if (op == "*=") {
+          return val.value().find(attrVal) != std::string::npos;
+        }
+        return false;
       }
     case SelectorType::PseudoClass:
       return matchPseudoClass(element, simple.value);
@@ -215,8 +253,13 @@ private:
         return matchNthOfType(element, formula);
       }
     } else if (name.substr(0, 3) == "not") {
-      // :not(selector) - simplified support
-      return !matchNotPseudoClass(element, name);
+      // :not(selector) — enhanced with compound selector support
+      std::string args = name.substr(3);
+      if (args.size() >= 2 && args[0] == '(' && args.back() == ')') {
+        std::string inner = args.substr(1, args.size() - 2);
+        return !matchNotEnhanced(element, inner);
+      }
+      return false;
     } else if (name == "checked") {
       return element->isChecked();
     } else if (name == "disabled") {
@@ -232,7 +275,10 @@ private:
     } else if (name == "visited") {
       return element->isVisited();
     }
-    return false;
+
+    // Phase 2: enhanced pseudo-classes (first-of-type, last-of-type,
+    // only-of-type, nth-last-of-type, target, lang(), :is(), :where(), :has())
+    return matchPseudoClassPhase2(element, name);
   }
 
   bool matchPseudoElement(dom::ElementPtr element, const std::string &name) {
@@ -310,167 +356,281 @@ private:
     }
   }
 
-  bool matchNotPseudoClass(dom::ElementPtr element, const std::string &name) {
-    // Simplified :not() support - just check if it's a class or id
-    // Full implementation would parse nested selectors
-    if (name.size() >= 5 && name.substr(0, 4) == "not(" && name.back() == ')') {
-      std::string inner = name.substr(4, name.size() - 5);
-      if (!inner.empty()) {
-        if (inner[0] == '.') {
-          return element->hasClass(inner.substr(1));
-        } else if (inner[0] == '#') {
-          return element->id() == inner.substr(1);
-        } else {
-          // Assume it's a tag name
-          return dom::toLower(inner) == dom::toLower(element->localName());
+  // Enhanced :not() with compound selectors
+  // Supports: :not(.class), :not(#id), :not(tag), :not(tag.class)
+  //           :not([attr]), :not(:pseudo)
+  bool matchNotEnhanced(dom::ElementPtr element, const std::string &inner) {
+    if (inner.empty()) return false;
+
+    // Simple single selector
+    if (inner[0] == '.') {
+      return element->hasClass(inner.substr(1));
+    }
+    if (inner[0] == '#') {
+      return element->id() == inner.substr(1);
+    }
+    if (inner[0] == '[') {
+      std::string content = inner.substr(1, inner.size() - 2);
+      size_t eqPos = content.find('=');
+      if (eqPos == std::string::npos) {
+        return element->hasAttribute(content);
+      }
+      std::string attrName = content.substr(0, eqPos);
+      std::string attrVal = content.substr(eqPos + 1);
+      auto v = element->getAttribute(attrName);
+      return v.has_value() && v.value() == attrVal;
+    }
+    if (inner[0] == ':') {
+      std::string pseudo = inner.substr(1);
+      if (pseudo == "empty") return element->isEmpty();
+      if (pseudo == "first-child") return element->isFirstChild();
+      if (pseudo == "last-child") return element->isLastChild();
+      return false;
+    }
+
+    // Compound: tag.class or tag#id
+    size_t dotPos = inner.find('.');
+    size_t hashPos = inner.find('#');
+    if (dotPos != std::string::npos) {
+      std::string tag = inner.substr(0, dotPos);
+      std::string cls = inner.substr(dotPos + 1);
+      return dom::toLower(element->localName()) == dom::toLower(tag) &&
+             element->hasClass(cls);
+    }
+    if (hashPos != std::string::npos) {
+      std::string tag = inner.substr(0, hashPos);
+      std::string id = inner.substr(hashPos + 1);
+      return dom::toLower(element->localName()) == dom::toLower(tag) &&
+             element->id() == id;
+    }
+
+    // Just a tag name
+    return dom::toLower(element->localName()) == dom::toLower(inner);
+  }
+
+  // Enhanced pseudo-class matching (phase 2):
+  // first-of-type, last-of-type, only-of-type, nth-last-of-type,
+  // target, lang(), :is(), :where(), :has()
+  bool matchPseudoClassPhase2(dom::ElementPtr element,
+                              const std::string &name) {
+    // :first-of-type
+    if (name == "first-of-type") {
+      auto prev = element->previousElementSibling();
+      while (prev) {
+        if (prev->localName() == element->localName()) return false;
+        prev = prev->previousElementSibling();
+      }
+      return true;
+    }
+
+    // :last-of-type
+    if (name == "last-of-type") {
+      auto next = element->nextElementSibling();
+      while (next) {
+        if (next->localName() == element->localName()) return false;
+        next = next->nextElementSibling();
+      }
+      return true;
+    }
+
+    // :only-of-type
+    if (name == "only-of-type") {
+      auto prev = element->previousElementSibling();
+      while (prev) {
+        if (prev->localName() == element->localName()) return false;
+        prev = prev->previousElementSibling();
+      }
+      auto next = element->nextElementSibling();
+      while (next) {
+        if (next->localName() == element->localName()) return false;
+        next = next->nextElementSibling();
+      }
+      return true;
+    }
+
+    // :nth-last-of-type(an+b)
+    if (name.substr(0, 16) == "nth-last-of-type") {
+      std::string args = name.substr(16);
+      if (args.size() >= 2 && args[0] == '(' && args.back() == ')') {
+        std::string formula = args.substr(1, args.size() - 2);
+        int count = 1;
+        auto next = element->nextElementSibling();
+        while (next) {
+          if (next->localName() == element->localName()) count++;
+          next = next->nextElementSibling();
+        }
+        if (formula == "odd") return count % 2 == 1;
+        if (formula == "even") return count % 2 == 0;
+        if (formula == "n") return true;
+        try {
+          int target = std::stoi(formula);
+          return count == target;
+        } catch (...) {}
+      }
+      return false;
+    }
+
+    // :target
+    if (name == "target") {
+      return false;
+    }
+
+    // :lang(xx)
+    if (name.substr(0, 4) == "lang") {
+      std::string args = name.substr(4);
+      if (args.size() >= 2 && args[0] == '(' && args.back() == ')') {
+        std::string lang = args.substr(1, args.size() - 2);
+        auto val = element->getAttribute("lang");
+        if (!val.has_value()) {
+          auto parent = element->parentNode();
+          while (parent &&
+                 parent->nodeType() == dom::NodeType::Element) {
+            auto parentElem =
+                std::static_pointer_cast<dom::Element>(parent);
+            val = parentElem->getAttribute("lang");
+            if (val.has_value()) break;
+            parent = parent->parentNode();
+          }
+        }
+        if (val.has_value()) {
+          const std::string &v = val.value();
+          return v == lang || (v.size() > lang.size() &&
+                               v.substr(0, lang.size()) == lang &&
+                               v[lang.size()] == '-');
         }
       }
+      return false;
     }
-    return false;
+
+    return false; // Not handled
   }
 
   void applyDeclarations(ComputedStyle &style,
-                         const std::vector<Declaration> &decls) {
+                         const std::vector<Declaration> &decls,
+                         bool importantOnly = false) {
     for (const auto &decl : decls) {
+      // Skip declarations that don't match the important filter
+      if (decl.important != importantOnly) continue;
+
+      // Resolve CSS variables (var()) before parsing values
+      std::string resolvedValue = resolveCSSVariable(value, style);
+      const std::string& value = resolvedValue;
+
       if (decl.property == "display") {
-        if (decl.value == "none")
+        if (value == "none")
           style.display = Display::None;
-        else if (decl.value == "block")
+        else if (value == "block")
           style.display = Display::Block;
-        else if (decl.value == "inline")
+        else if (value == "inline")
           style.display = Display::Inline;
-        else if (decl.value == "flex")
+        else if (value == "flex")
           style.display = Display::Flex;
-        else if (decl.value == "inline-block")
+        else if (value == "inline-block")
           style.display = Display::InlineBlock;
-        else if (decl.value == "grid")
+        else if (value == "grid")
           style.display = Display::Grid;
       } else if (decl.property == "width") {
-        style.width = parseLength(decl.value);
+        style.width = parseLength(value);
       } else if (decl.property == "height") {
-        style.height = parseLength(decl.value);
+        style.height = parseLength(value);
       } else if (decl.property == "color") {
-        style.color = parseColor(decl.value);
+        style.color = parseColor(value);
       } else if (decl.property == "background-color") {
-        style.backgroundColor = parseColor(decl.value);
+        style.backgroundColor = parseColor(value);
       } else if (decl.property == "margin") {
-        auto l = parseLength(decl.value);
+        auto l = parseLength(value);
         style.marginTop = style.marginRight = style.marginBottom =
             style.marginLeft = l;
       } else if (decl.property == "padding") {
-        auto l = parseLength(decl.value);
+        auto l = parseLength(value);
         style.paddingTop = style.paddingRight = style.paddingBottom =
             style.paddingLeft = l;
       } else if (decl.property == "margin-top") {
-        style.marginTop = parseLength(decl.value);
+        style.marginTop = parseLength(value);
       } else if (decl.property == "margin-right") {
-        style.marginRight = parseLength(decl.value);
+        style.marginRight = parseLength(value);
       } else if (decl.property == "margin-bottom") {
-        style.marginBottom = parseLength(decl.value);
+        style.marginBottom = parseLength(value);
       } else if (decl.property == "margin-left") {
-        style.marginLeft = parseLength(decl.value);
+        style.marginLeft = parseLength(value);
       } else if (decl.property == "padding-top") {
-        style.paddingTop = parseLength(decl.value);
+        style.paddingTop = parseLength(value);
       } else if (decl.property == "padding-right") {
-        style.paddingRight = parseLength(decl.value);
+        style.paddingRight = parseLength(value);
       } else if (decl.property == "padding-bottom") {
-        style.paddingBottom = parseLength(decl.value);
+        style.paddingBottom = parseLength(value);
       } else if (decl.property == "padding-left") {
-        style.paddingLeft = parseLength(decl.value);
+        style.paddingLeft = parseLength(value);
       } else if (decl.property == "font-size") {
-        style.fontSize = parseLength(decl.value);
+        style.fontSize = parseLength(value);
       } else if (decl.property == "font-family") {
-        style.fontFamily = decl.value;
+        style.fontFamily = value;
       } else if (decl.property == "line-height") {
-        style.lineHeight = parseLineHeight(decl.value);
+        style.lineHeight = parseLineHeight(value);
       } else if (decl.property == "text-indent") {
-        style.textIndent = parseLength(decl.value);
+        style.textIndent = parseLength(value);
       } else if (decl.property == "white-space") {
-        if (decl.value == "normal")
+        if (value == "normal")
           style.whiteSpace = WhiteSpace::Normal;
-        else if (decl.value == "pre")
+        else if (value == "pre")
           style.whiteSpace = WhiteSpace::Pre;
-        else if (decl.value == "nowrap")
+        else if (value == "nowrap")
           style.whiteSpace = WhiteSpace::NoWrap;
-        else if (decl.value == "pre-wrap")
+        else if (value == "pre-wrap")
           style.whiteSpace = WhiteSpace::PreWrap;
-        else if (decl.value == "pre-line")
+        else if (value == "pre-line")
           style.whiteSpace = WhiteSpace::PreLine;
       } else if (decl.property == "vertical-align") {
-        if (decl.value == "baseline")
+        if (value == "baseline")
           style.verticalAlign = VerticalAlign::Baseline;
-        else if (decl.value == "top")
+        else if (value == "top")
           style.verticalAlign = VerticalAlign::Top;
-        else if (decl.value == "bottom")
+        else if (value == "bottom")
           style.verticalAlign = VerticalAlign::Bottom;
-        else if (decl.value == "middle")
+        else if (value == "middle")
           style.verticalAlign = VerticalAlign::Middle;
-        else if (decl.value == "text-top")
+        else if (value == "text-top")
           style.verticalAlign = VerticalAlign::TextTop;
-        else if (decl.value == "text-bottom")
+        else if (value == "text-bottom")
           style.verticalAlign = VerticalAlign::TextBottom;
-        else if (decl.value == "sub")
+        else if (value == "sub")
           style.verticalAlign = VerticalAlign::Sub;
-        else if (decl.value == "super")
+        else if (value == "super")
           style.verticalAlign = VerticalAlign::Super;
       } else if (decl.property == "flex-direction") {
-        if (decl.value == "row")
+        if (value == "row")
           style.flexDirection = FlexDirection::Row;
-        else if (decl.value == "row-reverse")
+        else if (value == "row-reverse")
           style.flexDirection = FlexDirection::RowReverse;
-        else if (decl.value == "column")
+        else if (value == "column")
           style.flexDirection = FlexDirection::Column;
-        else if (decl.value == "column-reverse")
+        else if (value == "column-reverse")
           style.flexDirection = FlexDirection::ColumnReverse;
       } else if (decl.property == "flex-wrap") {
-        if (decl.value == "nowrap")
+        if (value == "nowrap")
           style.flexWrap = FlexWrap::NoWrap;
-        else if (decl.value == "wrap")
+        else if (value == "wrap")
           style.flexWrap = FlexWrap::Wrap;
-        else if (decl.value == "wrap-reverse")
+        else if (value == "wrap-reverse")
           style.flexWrap = FlexWrap::WrapReverse;
-      } else if (decl.property == "justify-content") {
-        if (decl.value == "flex-start")
-          style.justifyContent = JustifyContent::FlexStart;
-        else if (decl.value == "flex-end")
-          style.justifyContent = JustifyContent::FlexEnd;
-        else if (decl.value == "center")
-          style.justifyContent = JustifyContent::Center;
-        else if (decl.value == "space-between")
-          style.justifyContent = JustifyContent::SpaceBetween;
-        else if (decl.value == "space-around")
-          style.justifyContent = JustifyContent::SpaceAround;
-        else if (decl.value == "space-evenly")
-          style.justifyContent = JustifyContent::SpaceEvenly;
-      } else if (decl.property == "align-items") {
-        if (decl.value == "stretch")
-          style.alignItems = AlignItems::Stretch;
-        else if (decl.value == "flex-start")
-          style.alignItems = AlignItems::FlexStart;
-        else if (decl.value == "flex-end")
-          style.alignItems = AlignItems::FlexEnd;
-        else if (decl.value == "center")
-          style.alignItems = AlignItems::Center;
-        else if (decl.value == "baseline")
-          style.alignItems = AlignItems::Baseline;
       } else if (decl.property == "flex-grow") {
         float f = 0.0f;
         try {
-          f = std::stof(decl.value);
+          f = std::stof(value);
         } catch (...) {}
         style.flexGrow = f;
       } else if (decl.property == "flex-shrink") {
         float f = 1.0f;
         try {
-          f = std::stof(decl.value);
+          f = std::stof(value);
         } catch (...) {}
         style.flexShrink = f;
       } else if (decl.property == "flex-basis") {
-        style.flexBasis = parseLength(decl.value);
+        style.flexBasis = parseLength(value);
       } else if (decl.property.substr(0, 2) == "--") {
         // CSS Custom Properties (CSS Variables)
         std::string varName = decl.property;
-        std::string varValue = decl.value;
+        std::string varValue = value;
         if (varValue.find("rgb") != std::string::npos) {
           style.setCustomProperty(varName, parseFunctionalColor(varValue));
         } else if (varValue.find("hsl") != std::string::npos) {
@@ -489,7 +649,7 @@ private:
         // Simple shorthand parsing: "width style color"
         // We only care about width and color for now.
         // E.g. "2px solid red"
-        std::stringstream ss(decl.value);
+        std::stringstream ss(value);
         std::string part;
         while (ss >> part) {
           if (part == "solid" || part == "dashed" || part == "dotted") {
@@ -508,50 +668,50 @@ private:
           }
         }
       } else if (decl.property == "border-width") {
-        auto l = parseLength(decl.value);
+        auto l = parseLength(value);
         style.borderTopWidth = style.borderRightWidth =
             style.borderBottomWidth = style.borderLeftWidth = l;
       } else if (decl.property == "border-color") {
-        auto c = parseColor(decl.value);
+        auto c = parseColor(value);
         style.borderTopColor = style.borderRightColor =
             style.borderBottomColor = style.borderLeftColor = c;
       } else if (decl.property == "border-left-width") {
-        style.borderLeftWidth = parseLength(decl.value);
+        style.borderLeftWidth = parseLength(value);
       } else if (decl.property == "border-right-width") {
-        style.borderRightWidth = parseLength(decl.value);
+        style.borderRightWidth = parseLength(value);
       } else if (decl.property == "border-top-width") {
-        style.borderTopWidth = parseLength(decl.value);
+        style.borderTopWidth = parseLength(value);
       } else if (decl.property == "border-bottom-width") {
-        style.borderBottomWidth = parseLength(decl.value);
+        style.borderBottomWidth = parseLength(value);
       } else if (decl.property == "border-left-color") {
-        style.borderLeftColor = parseColor(decl.value);
+        style.borderLeftColor = parseColor(value);
       } else if (decl.property == "border-right-color") {
-        style.borderRightColor = parseColor(decl.value);
+        style.borderRightColor = parseColor(value);
       } else if (decl.property == "border-top-color") {
-        style.borderTopColor = parseColor(decl.value);
+        style.borderTopColor = parseColor(value);
       } else if (decl.property == "border-bottom-color") {
-        style.borderBottomColor = parseColor(decl.value);
+        style.borderBottomColor = parseColor(value);
       } else if (decl.property == "box-sizing") {
-        if (decl.value == "border-box")
+        if (value == "border-box")
           style.boxSizing = BoxSizing::BorderBox;
         else
           style.boxSizing = BoxSizing::ContentBox;
       } else if (decl.property == "text-align") {
-        if (decl.value == "center")
+        if (value == "center")
           style.textAlign = TextAlign::Center;
-        else if (decl.value == "right")
+        else if (value == "right")
           style.textAlign = TextAlign::Right;
-        else if (decl.value == "justify")
+        else if (value == "justify")
           style.textAlign = TextAlign::Justify;
         else
           style.textAlign = TextAlign::Left;
       } else if (decl.property == "overflow" || decl.property == "overflow-x" || decl.property == "overflow-y") {
         Overflow overflowVal = Overflow::Visible;
-        if (decl.value == "hidden")
+        if (value == "hidden")
           overflowVal = Overflow::Hidden;
-        else if (decl.value == "scroll")
+        else if (value == "scroll")
           overflowVal = Overflow::Scroll;
-        else if (decl.value == "auto")
+        else if (value == "auto")
           overflowVal = Overflow::Auto;
         
         if (decl.property == "overflow") {
@@ -562,184 +722,184 @@ private:
           style.overflowY = overflowVal;
         }
       } else if (decl.property == "top") {
-        style.top = parseLength(decl.value);
+        style.top = parseLength(value);
       } else if (decl.property == "right") {
-        style.right = parseLength(decl.value);
+        style.right = parseLength(value);
       } else if (decl.property == "bottom") {
-        style.bottom = parseLength(decl.value);
+        style.bottom = parseLength(value);
       } else if (decl.property == "left") {
-        style.left = parseLength(decl.value);
+        style.left = parseLength(value);
       } else if (decl.property == "z-index") {
         try {
-          style.zIndex = std::stoi(decl.value);
+          style.zIndex = std::stoi(value);
         } catch (...) {}
       } else if (decl.property == "opacity") {
         try {
-          style.opacity = std::stof(decl.value);
+          style.opacity = std::stof(value);
         } catch (...) {
           style.opacity = 1.0f;
         }
       } else if (decl.property == "transform") {
-        if (decl.value != "none") {
-          style.transform = decl.value;
+        if (value != "none") {
+          style.transform = value;
         }
       } else if (decl.property == "filter") {
-        if (decl.value != "none") {
-          style.filter = decl.value;
+        if (value != "none") {
+          style.filter = value;
         }
       } else if (decl.property == "perspective") {
-        if (decl.value != "none") {
-          style.perspective = decl.value;
+        if (value != "none") {
+          style.perspective = value;
         }
       } else if (decl.property == "will-change") {
-        style.willChange = decl.value;
+        style.willChange = value;
       } else if (decl.property == "isolation") {
-        if (decl.value == "isolate") {
+        if (value == "isolate") {
           style.isolation = Isolation::Isolate;
         } else {
           style.isolation = Isolation::Auto;
         }
       } else if (decl.property == "position") {
-        if (decl.value == "static")
+        if (value == "static")
           style.position = Position::Static;
-        else if (decl.value == "relative")
+        else if (value == "relative")
           style.position = Position::Relative;
-        else if (decl.value == "absolute")
+        else if (value == "absolute")
           style.position = Position::Absolute;
-        else if (decl.value == "fixed")
+        else if (value == "fixed")
           style.position = Position::Fixed;
-        else if (decl.value == "sticky")
+        else if (value == "sticky")
           style.position = Position::Sticky;
       } else if (decl.property == "float") {
-        if (decl.value == "left")
+        if (value == "left")
           style.cssFloat = Float::Left;
-        else if (decl.value == "right")
+        else if (value == "right")
           style.cssFloat = Float::Right;
         else
           style.cssFloat = Float::None;
       } else if (decl.property == "clear") {
-        if (decl.value == "left")
+        if (value == "left")
           style.clear = Clear::Left;
-        else if (decl.value == "right")
+        else if (value == "right")
           style.clear = Clear::Right;
-        else if (decl.value == "both")
+        else if (value == "both")
           style.clear = Clear::Both;
         else
           style.clear = Clear::None;
       }
       // --- Grid Layout Properties ---
       else if (decl.property == "grid-template-columns") {
-        style.gridTemplateColumns = parseTrackSizeList(decl.value);
+        style.gridTemplateColumns = parseTrackSizeList(value);
       } else if (decl.property == "grid-template-rows") {
-        style.gridTemplateRows = parseTrackSizeList(decl.value);
+        style.gridTemplateRows = parseTrackSizeList(value);
       } else if (decl.property == "grid-auto-columns") {
-        style.gridAutoColumns = parseTrackSizeList(decl.value);
+        style.gridAutoColumns = parseTrackSizeList(value);
       } else if (decl.property == "grid-auto-rows") {
-        style.gridAutoRows = parseTrackSizeList(decl.value);
+        style.gridAutoRows = parseTrackSizeList(value);
       } else if (decl.property == "grid-column-gap" || decl.property == "column-gap") {
-        style.gridColumnGap = parseLength(decl.value);
+        style.gridColumnGap = parseLength(value);
       } else if (decl.property == "grid-row-gap" || decl.property == "row-gap") {
-        style.gridRowGap = parseLength(decl.value);
+        style.gridRowGap = parseLength(value);
       } else if (decl.property == "gap") {
-        auto l = parseLength(decl.value);
+        auto l = parseLength(value);
         style.gridColumnGap = l;
         style.gridRowGap = l;
       } else if (decl.property == "grid-auto-flow") {
-        if (decl.value == "column")
+        if (value == "column")
           style.gridAutoFlow = GridAutoFlow::Column;
-        else if (decl.value == "row")
+        else if (value == "row")
           style.gridAutoFlow = GridAutoFlow::Row;
-        else if (decl.value == "dense")
+        else if (value == "dense")
           style.gridAutoFlow = GridAutoFlow::RowDense;
-        else if (decl.value == "column dense")
+        else if (value == "column dense")
           style.gridAutoFlow = GridAutoFlow::ColumnDense;
       } else if (decl.property == "justify-items") {
-        if (decl.value == "start")
+        if (value == "start")
           style.gridJustifyItems = GridJustifyItems::Start;
-        else if (decl.value == "end")
+        else if (value == "end")
           style.gridJustifyItems = GridJustifyItems::End;
-        else if (decl.value == "center")
+        else if (value == "center")
           style.gridJustifyItems = GridJustifyItems::Center;
-        else if (decl.value == "stretch")
+        else if (value == "stretch")
           style.gridJustifyItems = GridJustifyItems::Stretch;
       } else if (decl.property == "align-items") {
         // Shared between flexbox and grid
-        if (decl.value == "stretch")
+        if (value == "stretch")
           style.alignItems = AlignItems::Stretch;
-        else if (decl.value == "flex-start" || decl.value == "start")
+        else if (value == "flex-start" || value == "start")
           style.alignItems = AlignItems::FlexStart;
-        else if (decl.value == "flex-end" || decl.value == "end")
+        else if (value == "flex-end" || value == "end")
           style.alignItems = AlignItems::FlexEnd;
-        else if (decl.value == "center")
+        else if (value == "center")
           style.alignItems = AlignItems::Center;
-        else if (decl.value == "baseline")
+        else if (value == "baseline")
           style.alignItems = AlignItems::Baseline;
       } else if (decl.property == "justify-content") {
         // Shared between flexbox and grid
-        if (decl.value == "flex-start" || decl.value == "start")
+        if (value == "flex-start" || value == "start")
           style.justifyContent = JustifyContent::FlexStart;
-        else if (decl.value == "flex-end" || decl.value == "end")
+        else if (value == "flex-end" || value == "end")
           style.justifyContent = JustifyContent::FlexEnd;
-        else if (decl.value == "center")
+        else if (value == "center")
           style.justifyContent = JustifyContent::Center;
-        else if (decl.value == "space-between")
+        else if (value == "space-between")
           style.justifyContent = JustifyContent::SpaceBetween;
-        else if (decl.value == "space-around")
+        else if (value == "space-around")
           style.justifyContent = JustifyContent::SpaceAround;
-        else if (decl.value == "space-evenly")
+        else if (value == "space-evenly")
           style.justifyContent = JustifyContent::SpaceEvenly;
       } else if (decl.property == "align-content") {
-        if (decl.value == "start")
+        if (value == "start")
           style.gridAlignContent = GridAlignContent::Start;
-        else if (decl.value == "end")
+        else if (value == "end")
           style.gridAlignContent = GridAlignContent::End;
-        else if (decl.value == "center")
+        else if (value == "center")
           style.gridAlignContent = GridAlignContent::Center;
-        else if (decl.value == "stretch")
+        else if (value == "stretch")
           style.gridAlignContent = GridAlignContent::Stretch;
-        else if (decl.value == "space-between")
+        else if (value == "space-between")
           style.gridAlignContent = GridAlignContent::SpaceBetween;
-        else if (decl.value == "space-around")
+        else if (value == "space-around")
           style.gridAlignContent = GridAlignContent::SpaceAround;
       }
       // --- Grid Item Properties ---
       else if (decl.property == "grid-column-start") {
-        style.gridColumnStart = parseGridLine(decl.value);
+        style.gridColumnStart = parseGridLine(value);
       } else if (decl.property == "grid-column-end") {
-        style.gridColumnEnd = parseGridLine(decl.value);
+        style.gridColumnEnd = parseGridLine(value);
       } else if (decl.property == "grid-row-start") {
-        style.gridRowStart = parseGridLine(decl.value);
+        style.gridRowStart = parseGridLine(value);
       } else if (decl.property == "grid-row-end") {
-        style.gridRowEnd = parseGridLine(decl.value);
+        style.gridRowEnd = parseGridLine(value);
       } else if (decl.property == "grid-column") {
-        parseGridShorthand(decl.value, style.gridColumnStart, style.gridColumnEnd);
+        parseGridShorthand(value, style.gridColumnStart, style.gridColumnEnd);
       } else if (decl.property == "grid-row") {
-        parseGridShorthand(decl.value, style.gridRowStart, style.gridRowEnd);
+        parseGridShorthand(value, style.gridRowStart, style.gridRowEnd);
       } else if (decl.property == "justify-self") {
-        if (decl.value == "start")
+        if (value == "start")
           style.gridJustifySelf = GridJustifySelf::Start;
-        else if (decl.value == "end")
+        else if (value == "end")
           style.gridJustifySelf = GridJustifySelf::End;
-        else if (decl.value == "center")
+        else if (value == "center")
           style.gridJustifySelf = GridJustifySelf::Center;
-        else if (decl.value == "stretch")
+        else if (value == "stretch")
           style.gridJustifySelf = GridJustifySelf::Stretch;
-        else if (decl.value == "auto")
+        else if (value == "auto")
           style.gridJustifySelf = GridJustifySelf::Auto;
       } else if (decl.property == "align-self") {
-        if (decl.value == "auto")
+        if (value == "auto")
           style.gridAlignSelf = GridAlignSelf::Auto;
-        else if (decl.value == "start")
+        else if (value == "start")
           style.gridAlignSelf = GridAlignSelf::Start;
-        else if (decl.value == "end")
+        else if (value == "end")
           style.gridAlignSelf = GridAlignSelf::End;
-        else if (decl.value == "center")
+        else if (value == "center")
           style.gridAlignSelf = GridAlignSelf::Center;
-        else if (decl.value == "stretch")
+        else if (value == "stretch")
           style.gridAlignSelf = GridAlignSelf::Stretch;
       }
 
-      style.otherProperties[decl.property] = decl.value;
+      style.otherProperties[decl.property] = value;
     }
   }
 
@@ -857,6 +1017,13 @@ private:
         uint8_t g = hexCharToInt(hex[1]) * 17;
         uint8_t b = hexCharToInt(hex[2]) * 17;
         return {r, g, b, 255};
+      } else if (hex.length() == 4) {
+        // #RGBA -> #RRGGBBAA
+        uint8_t r = hexCharToInt(hex[0]) * 17;
+        uint8_t g = hexCharToInt(hex[1]) * 17;
+        uint8_t b = hexCharToInt(hex[2]) * 17;
+        uint8_t a = hexCharToInt(hex[3]) * 17;
+        return {r, g, b, a};
       } else if (hex.length() == 6 || hex.length() == 8) {
         // #RRGGBB or #RRGGBBAA
         uint8_t r = (hexCharToInt(hex[0]) << 4) | hexCharToInt(hex[1]);
@@ -868,7 +1035,7 @@ private:
         }
         return {r, g, b, a};
       } else {
-        // Malformed hex color (not 3, 6, or 8 chars) — fallback
+        // Malformed hex color (not 3, 4, 6, or 8 chars) — fallback
         return Color::Black();
       }
     }
@@ -957,9 +1124,8 @@ private:
         continue;
       }
 
-      if (!percent.empty() && values.size() == 1) {
-        num = num * 255.0f / 100.0f;
-      }
+      // Note: HSL saturation and lightness are percentage values
+      // that are divided by 100 below (not converted to 0-255 like RGB).
       values.push_back(num);
     }
 

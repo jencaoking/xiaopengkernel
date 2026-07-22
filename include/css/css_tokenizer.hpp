@@ -22,9 +22,7 @@ public:
 
     while (position_ < length_) {
       Token token = consumeToken();
-      if (token.type != TokenType::Whitespace) {
-        tokens.push_back(std::move(token));
-      }
+      tokens.push_back(std::move(token));
     }
     tokens.emplace_back(TokenType::EndOfFile);
     return tokens;
@@ -132,14 +130,9 @@ private:
     if (digits == 0)
       return 0;
 
-    if (digits <= 6) {
-      codepoint = 0;
-      for (int i = 0; i < digits; ++i) {
-        codepoint = (codepoint << 4) | hexToUint32(hex[i]);
-      }
-    } else {
-      codepoint = hexToUint32(hex[0], hex[1], hex[2], hex[3]);
-      position_ -= digits - 4;
+    codepoint = 0;
+    for (int i = 0; i < digits; ++i) {
+      codepoint = (codepoint << 4) | hexToUint32(hex[i]);
     }
 
     if (!isValidUnicode(codepoint))
@@ -362,8 +355,10 @@ private:
 
     if (peek() == ':' && (name == "progid" || name == "expression" ||
                           name == "-moz-binding")) {
+      // consume the colon and optional function parens (IE legacy compat)
+      consume(); // ':'
       if (peek() == '(') {
-        consume();
+        consume(); // '('
         return {TokenType::Function, name};
       }
     }
@@ -375,11 +370,13 @@ private:
     if (position_ >= length_)
       return {TokenType::EndOfFile};
 
-    consumeWhitespace();
-    if (position_ >= length_)
-      return {TokenType::EndOfFile};
-
     char c = peek();
+
+    // Generate a single Whitespace token for consecutive whitespace chars
+    if (isWhitespace(c)) {
+      consumeWhitespace();
+      return {TokenType::Whitespace};
+    }
 
     if (c == '/' && peekNext() == '*') {
       consumeComment();
