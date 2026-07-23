@@ -513,7 +513,7 @@ private:
       if (decl.important != importantOnly) continue;
 
       // Resolve CSS variables (var()) before parsing values
-      std::string resolvedValue = resolveCSSVariable(value, style);
+      std::string resolvedValue = resolveCSSVariable(decl.value, style);
       const std::string& value = resolvedValue;
 
       if (decl.property == "display") {

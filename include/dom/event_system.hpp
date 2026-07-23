@@ -61,8 +61,9 @@ private:
 // EventSystem handles complete W3C event flow
 class EventSystem {
 public:
-  // Dispatch an event with complete capture -> target -> bubble flow
-  // Returns true if the event was prevented default
+  // Dispatch an event with complete capture -> target -> bubble flow.
+  // Per W3C DOM Event spec, returns true if the event was NOT canceled
+  // (i.e. preventDefault() was not invoked), false otherwise.
   static bool dispatchEvent(NodePtr target, const std::shared_ptr<Event> &event) {
     if (!target)
       return false;
@@ -104,7 +105,8 @@ public:
       }
     }
 
-    return event->isDefaultPrevented();
+    // W3C: return false only if the event was canceled (preventDefault invoked).
+    return !event->isDefaultPrevented();
   }
 
 private:

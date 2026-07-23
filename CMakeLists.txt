@@ -42,6 +42,18 @@ else()
     if(SDL2_FOUND)
         include_directories(${SDL2_INCLUDE_DIRS})
         add_compile_definitions(ENABLE_SDL)
+        # Expose SDL2 library targets in the same variables used by the
+        # MinGW branch so downstream targets can link uniformly.
+        if(TARGET SDL2::SDL2)
+            set(SDL2_LIBRARY SDL2::SDL2)
+        else()
+            set(SDL2_LIBRARY ${SDL2_LIBRARIES})
+        endif()
+        if(TARGET SDL2::SDL2main)
+            set(SDL2_MAIN_LIBRARY SDL2::SDL2main)
+        else()
+            set(SDL2_MAIN_LIBRARY "")
+        endif()
         message(STATUS "SDL2 found (system): ${SDL2_INCLUDE_DIRS}")
     else()
         message(WARNING "SDL2 not found. Window support will be disabled.")
@@ -99,6 +111,20 @@ if(ENABLE_FREETYPE AND EXISTS "${FREETYPE_ROOT}/lib/libfreetype.a" AND EXISTS "$
         "${FREETYPE_ROOT}/lib/libfreetype.a"
     )
     message(STATUS "FreeType and HarfBuzz enabled (bundled)")
+elseif(ENABLE_FREETYPE AND NOT MINGW_BUILD)
+    # Fall back to system-installed FreeType + HarfBuzz (typical on Linux/macOS).
+    find_package(Freetype QUIET)
+    find_path(HARFBUZZ_INCLUDE_DIR hb.h PATH_SUFFIXES harfbuzz)
+    find_library(HARFBUZZ_LIBRARY NAMES harfbuzz)
+    if(Freetype_FOUND AND HARFBUZZ_LIBRARY)
+        add_compile_definitions(ENABLE_FREETYPE)
+        include_directories(${FREETYPE_INCLUDE_DIRS} ${HARFBUZZ_INCLUDE_DIR})
+        set(FREETYPE_LIBRARIES ${HARFBUZZ_LIBRARY} ${FREETYPE_LIBRARIES})
+        message(STATUS "FreeType and HarfBuzz enabled (system)")
+    else()
+        message(WARNING "ENABLE_FREETYPE is ON but neither bundled nor system FreeType/HarfBuzz found. Disabling.")
+        set(ENABLE_FREETYPE OFF)
+    endif()
 elseif(ENABLE_FREETYPE)
     message(WARNING "ENABLE_FREETYPE is ON but libraries not found in third_party/. Disabling.")
     set(ENABLE_FREETYPE OFF)
@@ -138,11 +164,23 @@ list(FILTER ALL_SOURCES EXCLUDE REGEX "promise_binding\\.cpp$")
 
 # Create an OBJECT library for the core framework to be reused by multiple targets
 add_library(xiaopengkernel_core OBJECT ${ALL_SOURCES})
-target_compile_definitions(xiaopengkernel_core PRIVATE 
+target_compile_definitions(xiaopengkernel_core PRIVATE
     _CRT_SECURE_NO_WARNINGS
     CURL_STATICLIB
 )
 target_include_directories(xiaopengkernel_core PRIVATE ${CMAKE_SOURCE_DIR}/include ${CURL_INCLUDE_DIR})
+
+# FreeType/HarfBuzz are needed by the renderer sources in the core OBJECT
+# library. Propagate them as PUBLIC so every consumer (main exe, demos, tests)
+# links them automatically instead of each target having to add them manually.
+if(ENABLE_FREETYPE)
+    target_link_libraries(xiaopengkernel_core PUBLIC ${FREETYPE_LIBRARIES})
+endif()
+# pthread is required by several std primitives (std::thread, std::mutex).
+find_package(Threads QUIET)
+if(Threads_FOUND)
+    target_link_libraries(xiaopengkernel_core PUBLIC Threads::Threads)
+endif()
 
 if(MSVC)
     target_compile_options(xiaopengkernel_core PRIVATE 
@@ -234,8 +272,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 endif()
 
-if(EXISTS "${SDL2_ROOT}")
-    target_link_libraries(${PROJECT_NAME} PRIVATE 
+if(MINGW_BUILD AND EXISTS "${SDL2_ROOT}")
+    target_link_libraries(${PROJECT_NAME} PRIVATE
         mingw32
         ${SDL2_MAIN_LIBRARY}
         ${SDL2_LIBRARY}
@@ -251,6 +289,8 @@ if(EXISTS "${SDL2_ROOT}")
         shell32
         user32
     )
+elseif(SDL2_LIBRARY)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY})
 endif()
 
 if(TARGET quickjs)
@@ -264,82 +304,59 @@ endif()
 if(OPENGL_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${XPK_OPENGL_LIBRARIES})
     # Add OpenGL source files to core
-    target_sources(xiaopengkernel_core PRIVATE 
+    target_sources(xiaopengkernel_core PRIVATE
         src/renderer/opengl_canvas.cpp
         src/renderer/opengl_context.cpp
     )
-    
+
+    # Windows-only system libraries required by SDL2/OpenGL on MinGW.
+    if(MINGW_BUILD)
+        set(XPK_WIN_SYSLIBS winmm gdi32 imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32 user32)
+    else()
+        set(XPK_WIN_SYSLIBS "")
+    endif()
+
     # Add OpenGL test
     add_executable(test_opengl tests/test_opengl.cpp)
     target_include_directories(test_opengl PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(test_opengl PRIVATE SDL_MAIN_HANDLED)
-    target_link_libraries(test_opengl PRIVATE 
+    target_link_libraries(test_opengl PRIVATE
         ${SDL2_MAIN_LIBRARY}
         ${SDL2_LIBRARY}
         ${XPK_OPENGL_LIBRARIES}
-        winmm
-        gdi32
-        imm32
-        ole32
-        oleaut32
-        version
-        uuid
-        advapi32
-        setupapi
-        shell32
-        user32
+        ${XPK_WIN_SYSLIBS}
     )
-    set_target_properties(test_opengl PROPERTIES 
+    set_target_properties(test_opengl PROPERTIES
         WIN32_EXECUTABLE FALSE
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
     )
-    
+
     # Add simple OpenGL demo
     add_executable(simple_opengl_demo src/renderer/simple_opengl_demo.cpp)
     target_include_directories(simple_opengl_demo PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(simple_opengl_demo PRIVATE SDL_MAIN_HANDLED)
-    target_link_libraries(simple_opengl_demo PRIVATE 
+    target_link_libraries(simple_opengl_demo PRIVATE
         ${SDL2_MAIN_LIBRARY}
         ${SDL2_LIBRARY}
         ${XPK_OPENGL_LIBRARIES}
-        winmm
-        gdi32
-        imm32
-        ole32
-        oleaut32
-        version
-        uuid
-        advapi32
-        setupapi
-        shell32
-        user32
+        ${XPK_WIN_SYSLIBS}
     )
-    set_target_properties(simple_opengl_demo PROPERTIES 
+    set_target_properties(simple_opengl_demo PROPERTIES
         WIN32_EXECUTABLE FALSE
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
     )
-    
+
     # Add GPU acceleration test
     add_executable(test_gpu_acceleration tests/test_gpu_acceleration.cpp)
     target_include_directories(test_gpu_acceleration PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(test_gpu_acceleration PRIVATE SDL_MAIN_HANDLED)
-    target_link_libraries(test_gpu_acceleration PRIVATE 
+    target_link_libraries(test_gpu_acceleration PRIVATE
         ${SDL2_MAIN_LIBRARY}
         ${SDL2_LIBRARY}
         ${XPK_OPENGL_LIBRARIES}
-        winmm
-        gdi32
-        imm32
-        ole32
-        oleaut32
-        version
-        uuid
-        advapi32
-        setupapi
-        shell32
-        user32
+        ${XPK_WIN_SYSLIBS}
     )
-    set_target_properties(test_gpu_acceleration PROPERTIES 
+    set_target_properties(test_gpu_acceleration PROPERTIES
         WIN32_EXECUTABLE FALSE
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
     )
@@ -413,11 +430,14 @@ endfunction()
 
 # Helper: add SDL2 to a test target
 function(add_xpk_test_sdl target_name)
-    if(EXISTS "${SDL2_ROOT}")
+    if(MINGW_BUILD AND EXISTS "${SDL2_ROOT}")
         target_link_libraries(${target_name} PRIVATE
             mingw32 ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY}
             winmm gdi32 imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32 user32
         )
+        target_compile_definitions(${target_name} PRIVATE SDL_MAIN_HANDLED)
+    elseif(SDL2_LIBRARY)
+        target_link_libraries(${target_name} PRIVATE ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY})
         target_compile_definitions(${target_name} PRIVATE SDL_MAIN_HANDLED)
     endif()
     if(OPENGL_FOUND)
@@ -516,7 +536,7 @@ target_link_libraries(minimal_demo PRIVATE
 else()
 target_link_libraries(minimal_demo PRIVATE ${CURL_LIBRARY})
 endif()
-if(EXISTS "${SDL2_ROOT}")
+if(MINGW_BUILD AND EXISTS "${SDL2_ROOT}")
   target_link_libraries(minimal_demo PRIVATE mingw32
       ${SDL2_MAIN_LIBRARY}
       ${SDL2_LIBRARY}
@@ -532,6 +552,8 @@ if(EXISTS "${SDL2_ROOT}")
       shell32
       user32
   )
+elseif(SDL2_LIBRARY)
+  target_link_libraries(minimal_demo PRIVATE ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY})
 endif()
 if(OPENGL_FOUND)
   target_link_libraries(minimal_demo PRIVATE ${XPK_OPENGL_LIBRARIES})

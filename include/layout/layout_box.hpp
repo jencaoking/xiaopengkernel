@@ -86,13 +86,19 @@ public:
   // Stacking context support
   bool createsStackingContext() const {
     const auto &s = style_;
-    
+
     // Root element creates stacking context
     if (node_ && node_->nodeType() == dom::NodeType::Element) {
       auto elem = std::static_pointer_cast<dom::Element>(node_);
       if (elem->localName() == "html") {
         return true;
       }
+    }
+
+    // A box with no parent is the root of the layout tree and always
+    // establishes a stacking context (analogous to the document root).
+    if (parent_.expired()) {
+      return true;
     }
 
     // position: fixed or sticky
@@ -112,17 +118,17 @@ public:
     }
 
     // transform != none
-    if (!s.transform.empty()) {
+    if (!s.transform.empty() && s.transform != "none") {
       return true;
     }
 
     // filter != none
-    if (!s.filter.empty()) {
+    if (!s.filter.empty() && s.filter != "none") {
       return true;
     }
 
     // perspective != none
-    if (!s.perspective.empty()) {
+    if (!s.perspective.empty() && s.perspective != "none") {
       return true;
     }
 
