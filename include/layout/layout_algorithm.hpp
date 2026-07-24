@@ -656,6 +656,26 @@ inline void InlineFormattingContext::layoutText(
   const auto &style = nodeBox->style();
   const auto whiteSpace = style.whiteSpace;
 
+  // Apply text-transform to get the display text for measurement.
+  std::string displayText = text;
+  if (style.textTransform == css::TextTransform::Uppercase) {
+    std::transform(displayText.begin(), displayText.end(), displayText.begin(),
+                   [](unsigned char c) { return std::toupper(c); });
+  } else if (style.textTransform == css::TextTransform::Lowercase) {
+    std::transform(displayText.begin(), displayText.end(), displayText.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+  } else if (style.textTransform == css::TextTransform::Capitalize) {
+    bool nextUpper = true;
+    for (auto &c : displayText) {
+      if (std::isspace(static_cast<unsigned char>(c))) {
+        nextUpper = true;
+      } else if (nextUpper) {
+        c = std::toupper(static_cast<unsigned char>(c));
+        nextUpper = false;
+      }
+    }
+  }
+
   // Resolve font metrics for this fragment's text.
   std::string fontFamily = style.fontFamily;
   int fontSize = static_cast<int>(style.fontSize.value);
@@ -695,9 +715,13 @@ inline void InlineFormattingContext::layoutText(
     if (start >= end)
       return;
     const size_t len = end - start;
-    const std::string word = text.substr(start, len);
-    const float wordWidth =
-        metrics.measureWord(word, fontFamily, fontSize).width;
+    const std::string word = displayText.substr(start, len);
+    float wordWidth = metrics.measureWord(word, fontFamily, fontSize).width;
+
+    // letter-spacing: add spacing between each character
+    if (style.letterSpacing != 0.0f && len > 1) {
+      wordWidth += style.letterSpacing * static_cast<float>(len - 1);
+    }
 
     // Wrap if the word does not fit on the current line and we are not at
     // the line's start (a single word longer than the line is allowed to
@@ -720,6 +744,8 @@ inline void InlineFormattingContext::layoutText(
     frag.startOffset = start;
     frag.endOffset = end;
     frag.verticalAlign = style.verticalAlign;
+    frag.verticalAlignOffset = style.verticalAlignOffset;
+    frag.textDecorationLine = style.textDecorationLine;
     frag.isText = true;
 
     currentLine.addFragment(frag);
@@ -729,7 +755,7 @@ inline void InlineFormattingContext::layoutText(
 
   auto emitSpace = [&]() {
     if (lineHasContent) {
-      currentX += spaceWidth;
+      currentX += spaceWidth + style.wordSpacing;
     }
   };
 
@@ -739,8 +765,8 @@ inline void InlineFormattingContext::layoutText(
   };
 
   size_t pos = 0;
-  while (pos < text.length()) {
-    char c = text[pos];
+  while (pos < displayText.length()) {
+    char c = displayText[pos];
 
     if (c == '\n') {
       if (preserveNewlines) {
@@ -750,9 +776,9 @@ inline void InlineFormattingContext::layoutText(
       }
       // For Normal/NoWrap, newlines are treated as a collapsible space.
       ++pos;
-      while (pos < text.length() &&
-             std::isspace(static_cast<unsigned char>(text[pos])) &&
-             text[pos] != '\n') {
+      while (pos < displayText.length() &&
+             std::isspace(static_cast<unsigned char>(displayText[pos])) &&
+             displayText[pos] != '\n') {
         ++pos;
       }
       emitSpace();
@@ -763,9 +789,9 @@ inline void InlineFormattingContext::layoutText(
       if (preserveSpaces) {
         // Preserve each space character as its own (width) contribution.
         size_t runStart = pos;
-        while (pos < text.length() &&
-               std::isspace(static_cast<unsigned char>(text[pos])) &&
-               text[pos] != '\n') {
+        while (pos < displayText.length() &&
+               std::isspace(static_cast<unsigned char>(displayText[pos])) &&
+               displayText[pos] != '\n') {
           ++pos;
         }
         size_t runLen = pos - runStart;
@@ -775,9 +801,9 @@ inline void InlineFormattingContext::layoutText(
       } else {
         // Collapse runs of whitespace to a single space.
         ++pos;
-        while (pos < text.length() &&
-               std::isspace(static_cast<unsigned char>(text[pos])) &&
-               text[pos] != '\n') {
+        while (pos < displayText.length() &&
+               std::isspace(static_cast<unsigned char>(displayText[pos])) &&
+               displayText[pos] != '\n') {
           ++pos;
         }
         emitSpace();
@@ -787,8 +813,8 @@ inline void InlineFormattingContext::layoutText(
 
     // Word: run of non-whitespace characters.
     size_t wordStart = pos;
-    while (pos < text.length() &&
-           !std::isspace(static_cast<unsigned char>(text[pos]))) {
+    while (pos < displayText.length() &&
+           !std::isspace(static_cast<unsigned char>(displayText[pos]))) {
       ++pos;
     }
     emitWord(wordStart, pos);
@@ -850,6 +876,7 @@ inline void InlineFormattingContext::layoutInlineBlock(
   frag.ascent = fragBaseline;
   frag.descent = 0;
   frag.verticalAlign = item->style().verticalAlign;
+  frag.verticalAlignOffset = item->style().verticalAlignOffset;
   frag.isText = false;
 
   currentLine.addFragment(frag);
@@ -863,7 +890,14 @@ inline void InlineFormattingContext::applyTextAlignment(
     return;
 
   bool firstLine = true;
+  bool isLastLine = false;
+  size_t lineCount = box->lineBoxes().size();
+  size_t lineIndex = 0;
+
   for (auto &lineBox : box->lineBoxes()) {
+    ++lineIndex;
+    isLastLine = (lineIndex == lineCount);
+
     float usedWidth = 0;
     for (const auto &frag : lineBox.fragments()) {
       usedWidth = std::max(usedWidth, frag.x + frag.width);
@@ -878,6 +912,26 @@ inline void InlineFormattingContext::applyTextAlignment(
       offset = (available - usedWidth) / 2.0f;
     } else if (style.textAlign == css::TextAlign::Right) {
       offset = available - usedWidth;
+    } else if (style.textAlign == css::TextAlign::Justify) {
+      // Justify: distribute extra space between words on non-last lines
+      if (!isLastLine) {
+        size_t wordCount = 0;
+        for (const auto &frag : lineBox.fragments()) {
+          if (frag.isText)
+            wordCount++;
+        }
+        if (wordCount > 1) {
+          float extraSpace = available - usedWidth;
+          float spacePerWord = extraSpace / static_cast<float>(wordCount - 1);
+          float shift = 0;
+          for (auto &frag : lineBox.fragments()) {
+            frag.x += shift;
+            if (frag.isText)
+              shift += spacePerWord;
+          }
+        }
+      }
+      // Last line is left-aligned (standard behavior)
     }
     if (offset > 0)
       lineBox.shiftFragmentsX(offset);

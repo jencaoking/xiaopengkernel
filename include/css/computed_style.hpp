@@ -129,6 +129,12 @@ enum class WhiteSpace {
   PreLine    // collapse newlines to space, preserve newlines, wrap
 };
 
+/// text-decoration line style
+enum class TextDecorationLine { None, Underline, Overline, LineThrough };
+
+/// text-transform mode
+enum class TextTransform { None, Uppercase, Lowercase, Capitalize };
+
 /// line-height: how to compute the height of a line box for text content.
 struct LineHeight {
   enum class Mode { Normal, Number, Length, Percent };
@@ -241,6 +247,13 @@ struct ComputedStyle {
   Length textIndent = Length::Px(0);
   WhiteSpace whiteSpace = WhiteSpace::Normal;
   VerticalAlign verticalAlign = VerticalAlign::Baseline;
+
+  // IFC properties
+  float letterSpacing = 0.0f;              // CSS letter-spacing (px)
+  float wordSpacing = 0.0f;               // CSS word-spacing (px)
+  TextDecorationLine textDecorationLine = TextDecorationLine::None;
+  TextTransform textTransform = TextTransform::None;
+  float verticalAlignOffset = 0.0f;       // Numeric vertical-align offset (px)
 
   // Generic storage for other properties
   std::unordered_map<std::string, std::string> otherProperties;

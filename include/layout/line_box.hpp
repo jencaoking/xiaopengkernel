@@ -45,6 +45,13 @@ struct BoxFragment {
 
   /// True for fragments produced from text nodes (vs. atomic inline boxes).
   bool isText = false;
+
+  /// Numeric vertical-align offset (px). Applied in addition to keyword
+  /// alignment in finalizeAlignment(). Only used when non-zero.
+  float verticalAlignOffset = 0.0f;
+
+  /// Text decoration line style for this fragment.
+  css::TextDecorationLine textDecorationLine = css::TextDecorationLine::None;
 };
 
 /// A line box is the horizontal strip that holds one row of inline content
@@ -150,8 +157,9 @@ public:
           break;
         case css::VerticalAlign::Baseline:
         default:
-          // Align fragment's baseline with the line's baseline.
-          frag.y = maxAscent_ - frag.baseline;
+          // Align fragment's baseline with the line's baseline,
+          // plus any numeric offset (vertical-align: 2px etc.)
+          frag.y = maxAscent_ - frag.baseline + frag.verticalAlignOffset;
           break;
       }
     }

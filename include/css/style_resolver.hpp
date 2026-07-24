@@ -513,7 +513,7 @@ private:
       if (decl.important != importantOnly) continue;
 
       // Resolve CSS variables (var()) before parsing values
-      std::string resolvedValue = resolveCSSVariable(value, style);
+      std::string resolvedValue = resolveCSSVariable(decl.value, style);
       const std::string& value = resolvedValue;
 
       if (decl.property == "display") {
@@ -597,6 +597,51 @@ private:
           style.verticalAlign = VerticalAlign::Sub;
         else if (value == "super")
           style.verticalAlign = VerticalAlign::Super;
+        else {
+          // Try numeric: "2px", "0.5em", "10%"
+          auto length = parseLength(value);
+          if (length.unit != css::Length::Unit::Auto) {
+            style.verticalAlign = VerticalAlign::Baseline;
+            style.verticalAlignOffset = length.value;
+          }
+        }
+      } else if (decl.property == "letter-spacing") {
+        if (value == "normal")
+          style.letterSpacing = 0.0f;
+        else
+          style.letterSpacing = parseLength(value).value;
+      } else if (decl.property == "word-spacing") {
+        if (value == "normal")
+          style.wordSpacing = 0.0f;
+        else
+          style.wordSpacing = parseLength(value).value;
+      } else if (decl.property == "text-decoration-line") {
+        if (value == "underline")
+          style.textDecorationLine = TextDecorationLine::Underline;
+        else if (value == "overline")
+          style.textDecorationLine = TextDecorationLine::Overline;
+        else if (value == "line-through")
+          style.textDecorationLine = TextDecorationLine::LineThrough;
+        else
+          style.textDecorationLine = TextDecorationLine::None;
+      } else if (decl.property == "text-decoration") {
+        if (value.find("underline") != std::string::npos)
+          style.textDecorationLine = TextDecorationLine::Underline;
+        else if (value.find("overline") != std::string::npos)
+          style.textDecorationLine = TextDecorationLine::Overline;
+        else if (value.find("line-through") != std::string::npos)
+          style.textDecorationLine = TextDecorationLine::LineThrough;
+        else
+          style.textDecorationLine = TextDecorationLine::None;
+      } else if (decl.property == "text-transform") {
+        if (value == "uppercase")
+          style.textTransform = TextTransform::Uppercase;
+        else if (value == "lowercase")
+          style.textTransform = TextTransform::Lowercase;
+        else if (value == "capitalize")
+          style.textTransform = TextTransform::Capitalize;
+        else
+          style.textTransform = TextTransform::None;
       } else if (decl.property == "flex-direction") {
         if (value == "row")
           style.flexDirection = FlexDirection::Row;

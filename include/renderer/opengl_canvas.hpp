@@ -37,6 +37,7 @@ public:
 
   void fillRect(int x, int y, int width, int height, Color color) override;
   void drawRect(int x, int y, int width, int height, Color color) override;
+  void drawLine(int x1, int y1, int x2, int y2, Color color) override;
   void drawText(int x, int y, const std::string &text, Color color,
                 int scale = 1) override;
 

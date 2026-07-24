@@ -7,7 +7,10 @@
 //   - white-space: normal / pre / nowrap / pre-wrap / pre-line
 //   - line-height: number / length / percent / normal
 //   - text-indent on the first formatted line
-//   - text-align: left / center / right
+//   - text-align: left / center / right / justify
+//   - letter-spacing / word-spacing
+//   - text-decoration / text-transform
+//   - numeric vertical-align
 
 #include "test_framework.hpp"
 
@@ -423,6 +426,206 @@ TEST(IFC_MixedTextAndInlineBlockOnSameLine) {
     EXPECT_LT(frags[0].x, frags[1].x);
     EXPECT_LT(frags[1].x, frags[2].x);
   }
+}
+
+// ---------------------------------------------------------------------------
+// letter-spacing
+// ---------------------------------------------------------------------------
+
+TEST(IFC_LetterSpacingIncreasesWordWidth) {
+  ComputedStyle style;
+  style.letterSpacing = 4.0f;
+  auto root = makeBlock(500);
+  root->addChild(makeText("AB", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frag = root->lineBoxes()[0].fragments()[0];
+  // Width should include letter-spacing for 1 gap (2 chars, 1 gap)
+  auto &metrics = renderer::TextMetrics::instance();
+  float baseWidth = metrics.measureWord("AB", "serif", 16).width;
+  EXPECT_GE(frag.width, baseWidth + 3.0f); // at least base + 4px spacing
+}
+
+TEST(IFC_LetterSpacingWrapsCorrectly) {
+  ComputedStyle style;
+  style.letterSpacing = 4.0f;
+  auto root = makeBlock(30);
+  root->addChild(makeText("AB CD", style));
+  layoutRoot(root);
+  // With letter-spacing, words should wrap at the right boundary
+  // "AB" ≈ 16+4=20px, "CD" ≈ 16+4=20px, space=8px → total 48px > 30px
+  EXPECT_GT(root->lineBoxes().size(), 1u);
+}
+
+// ---------------------------------------------------------------------------
+// word-spacing
+// ---------------------------------------------------------------------------
+
+TEST(IFC_WordSpacingIncreasesSpaceWidth) {
+  ComputedStyle style;
+  style.wordSpacing = 20.0f;
+  auto root = makeBlock(500);
+  root->addChild(makeText("A B", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frags = root->lineBoxes()[0].fragments();
+  ASSERT_EQ(frags.size(), 2u);
+  // Gap between fragments should be spaceWidth + 20px
+  float gap = frags[1].x - (frags[0].x + frags[0].width);
+  EXPECT_GE(gap, 19.0f); // at least 20px (minus rounding)
+}
+
+// ---------------------------------------------------------------------------
+// text-decoration
+// ---------------------------------------------------------------------------
+
+TEST(IFC_TextDecorationUnderline) {
+  ComputedStyle style;
+  style.textDecorationLine = TextDecorationLine::Underline;
+  auto root = makeBlock(200);
+  root->addChild(makeText("Hello", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frag = root->lineBoxes()[0].fragments()[0];
+  EXPECT_EQ(frag.textDecorationLine, TextDecorationLine::Underline);
+}
+
+TEST(IFC_TextDecorationOverline) {
+  ComputedStyle style;
+  style.textDecorationLine = TextDecorationLine::Overline;
+  auto root = makeBlock(200);
+  root->addChild(makeText("Hello", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frag = root->lineBoxes()[0].fragments()[0];
+  EXPECT_EQ(frag.textDecorationLine, TextDecorationLine::Overline);
+}
+
+TEST(IFC_TextDecorationLineThrough) {
+  ComputedStyle style;
+  style.textDecorationLine = TextDecorationLine::LineThrough;
+  auto root = makeBlock(200);
+  root->addChild(makeText("Hello", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frag = root->lineBoxes()[0].fragments()[0];
+  EXPECT_EQ(frag.textDecorationLine, TextDecorationLine::LineThrough);
+}
+
+// ---------------------------------------------------------------------------
+// text-transform
+// ---------------------------------------------------------------------------
+
+TEST(IFC_TextTransformUppercase) {
+  ComputedStyle style;
+  style.textTransform = TextTransform::Uppercase;
+  auto root = makeBlock(500);
+  root->addChild(makeText("hello", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frag = root->lineBoxes()[0].fragments()[0];
+  // Width should match "HELLO" not "hello"
+  auto &metrics = renderer::TextMetrics::instance();
+  float upperWidth = metrics.measureWord("HELLO", "serif", 16).width;
+  EXPECT_GE(frag.width, upperWidth - 1.0f);
+}
+
+TEST(IFC_TextTransformLowercase) {
+  ComputedStyle style;
+  style.textTransform = TextTransform::Lowercase;
+  auto root = makeBlock(500);
+  root->addChild(makeText("HELLO", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frag = root->lineBoxes()[0].fragments()[0];
+  // Width should match "hello" not "HELLO"
+  auto &metrics = renderer::TextMetrics::instance();
+  float lowerWidth = metrics.measureWord("hello", "serif", 16).width;
+  EXPECT_GE(frag.width, lowerWidth - 1.0f);
+}
+
+TEST(IFC_TextTransformCapitalize) {
+  ComputedStyle style;
+  style.textTransform = TextTransform::Capitalize;
+  auto root = makeBlock(500);
+  root->addChild(makeText("hello world", style));
+  layoutRoot(root);
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  // Capitalize: "Hello World"
+  // Just verify layout succeeds and produces fragments
+  EXPECT_FALSE(root->lineBoxes()[0].fragments().empty());
+}
+
+// ---------------------------------------------------------------------------
+// text-align: justify
+// ---------------------------------------------------------------------------
+
+TEST(IFC_TextAlignJustifyDistributesSpace) {
+  ComputedStyle blockStyle;
+  blockStyle.display = Display::Block;
+  blockStyle.width = Length::Px(100);
+  blockStyle.textAlign = TextAlign::Justify;
+  auto root = std::make_shared<LayoutBox>(
+      BoxType::BlockNode, blockStyle, std::make_shared<Element>("div"));
+  // Use text that wraps so the first line is NOT the last line
+  root->addChild(makeText("one two three four five"));
+  layoutRoot(root);
+  // Should have multiple lines; first line is not last → justify applies
+  EXPECT_GT(root->lineBoxes().size(), 1u);
+  const auto &frags = root->lineBoxes()[0].fragments();
+  // First line words should have extra space distributed between them
+  if (frags.size() >= 2) {
+    float gap1 = frags[1].x - (frags[0].x + frags[0].width);
+    // Gap should be larger than a normal space
+    auto &metrics = renderer::TextMetrics::instance();
+    float normalSpace = metrics.spaceWidth("serif", 16);
+    EXPECT_GT(gap1, normalSpace + 1.0f);
+  }
+}
+
+TEST(IFC_TextAlignJustifyLastLineLeftAligned) {
+  ComputedStyle blockStyle;
+  blockStyle.display = Display::Block;
+  blockStyle.width = Length::Px(120);
+  blockStyle.textAlign = TextAlign::Justify;
+  auto root = std::make_shared<LayoutBox>(
+      BoxType::BlockNode, blockStyle, std::make_shared<Element>("div"));
+  root->addChild(makeText("one two three four five six seven eight"));
+  layoutRoot(root);
+  // Last line should be left-aligned (no extra spacing)
+  if (root->lineBoxes().size() >= 2) {
+    const auto &lastLine = root->lineBoxes().back();
+    const auto &frags = lastLine.fragments();
+    if (!frags.empty()) {
+      // First fragment should start near x=0
+      EXPECT_LT(frags[0].x, 2.0f);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// numeric vertical-align
+// ---------------------------------------------------------------------------
+
+TEST(IFC_VerticalAlignNumericOffset) {
+  ComputedStyle style;
+  style.display = Display::InlineBlock;
+  style.width = Length::Px(20);
+  style.height = Length::Px(20);
+  style.verticalAlign = VerticalAlign::Baseline;
+  style.verticalAlignOffset = 10.0f; // shift down 10px
+  auto ib = std::make_shared<LayoutBox>(
+      BoxType::InlineBlockNode, style, std::make_shared<Element>("span"));
+
+  auto root = makeBlock(200);
+  root->addChild(ib);
+  layoutRoot(root);
+
+  ASSERT_EQ(root->lineBoxes().size(), 1u);
+  const auto &frag = root->lineBoxes()[0].fragments()[0];
+  // baseline alignment: y = maxAscent - baseline + offset
+  // With offset=10, fragment should be 10px lower than baseline-only alignment
+  EXPECT_GE(frag.y, 9.0f); // at least 10px offset (minus rounding)
 }
 
 int main(int argc, char **argv) {

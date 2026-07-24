@@ -35,6 +35,7 @@ public:
   virtual void fillRect(int x, int y, int width, int height, Color color) = 0;
   virtual void drawRect(int x, int y, int width, int height,
                         Color color) = 0; // Border
+  virtual void drawLine(int x1, int y1, int x2, int y2, Color color) = 0;
   virtual void drawText(int x, int y, const std::string &text, Color color,
                         int scale = 1) = 0;
 

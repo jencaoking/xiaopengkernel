@@ -293,6 +293,49 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
     }
   }
 
+  // --- 4b. Paint text decorations (underline, overline, line-through) ---
+  for (const auto &line : box->lineBoxes()) {
+    int lineAbsY = borderBoxY + static_cast<int>(line.y());
+
+    for (const auto &frag : line.fragments()) {
+      if (!frag.box || !frag.isText)
+        continue;
+      if (frag.textDecorationLine == css::TextDecorationLine::None)
+        continue;
+
+      int fragAbsX = borderBoxX + static_cast<int>(dims.border.left) +
+                     static_cast<int>(dims.padding.left) +
+                     static_cast<int>(frag.x);
+      int fragAbsY = lineAbsY + static_cast<int>(frag.y);
+      int fragW = static_cast<int>(frag.width);
+      int fragH = static_cast<int>(frag.height);
+      int baselineY = fragAbsY + static_cast<int>(frag.baseline);
+
+      const auto &c = frag.box->style().color;
+      Color decoColor = toColor(c);
+
+      switch (frag.textDecorationLine) {
+        case css::TextDecorationLine::Underline:
+          // 1px line below baseline
+          canvas.drawLine(fragAbsX, baselineY + 2,
+                          fragAbsX + fragW, baselineY + 2, decoColor);
+          break;
+        case css::TextDecorationLine::Overline:
+          // 1px line at top of fragment
+          canvas.drawLine(fragAbsX, fragAbsY,
+                          fragAbsX + fragW, fragAbsY, decoColor);
+          break;
+        case css::TextDecorationLine::LineThrough:
+          // 1px line at middle of fragment
+          canvas.drawLine(fragAbsX, fragAbsY + fragH / 2,
+                          fragAbsX + fragW, fragAbsY + fragH / 2, decoColor);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
   // --- 5. Pop clip rect if we pushed one ---
   if (needsClip) {
     canvas.popClipRect();
