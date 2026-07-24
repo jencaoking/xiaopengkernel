@@ -45,6 +45,16 @@ struct Dimensions {
 
 enum class BoxType { BlockNode, InlineNode, InlineBlockNode, AnonymousBlock, AnonymousInline };
 
+/// Tracks a single floated box's position and dimensions within a BFC.
+struct FloatInfo {
+  LayoutBoxPtr box;
+  float x = 0;        // Left edge of margin box (relative to BFC content edge)
+  float y = 0;        // Top edge of margin box
+  float width = 0;    // Outer width (margin+border+padding+content)
+  float height = 0;   // Outer height
+  bool isLeft = true; // true for float:left, false for float:right
+};
+
 class LayoutBox;
 using LayoutBoxPtr = std::shared_ptr<LayoutBox>;
 
@@ -75,6 +85,19 @@ public:
   void addLineBox(LineBox line) { lineBoxes_.push_back(line); }
   const std::vector<LineBox> &lineBoxes() const { return lineBoxes_; }
   std::vector<LineBox> &lineBoxes() { return lineBoxes_; }
+
+  // Float support
+  bool isFloat() const { return isFloat_; }
+  void setFloat(bool v) { isFloat_ = v; }
+
+  // Float tracking for this BFC (set by LayoutAlgorithm after layout)
+  const std::vector<FloatInfo> &leftFloats() const { return leftFloats_; }
+  const std::vector<FloatInfo> &rightFloats() const { return rightFloats_; }
+  void setActiveFloats(const std::vector<FloatInfo> &l,
+                       const std::vector<FloatInfo> &r) {
+    leftFloats_ = l;
+    rightFloats_ = r;
+  }
 
   // Convenience for layout tree construction
   LayoutBoxPtr getLastChild() const {
@@ -176,6 +199,11 @@ private:
   std::vector<LayoutBoxPtr> children_;
   std::vector<LineBox> lineBoxes_;
   std::weak_ptr<LayoutBox> parent_;
+
+  // Float support
+  bool isFloat_ = false;
+  std::vector<FloatInfo> leftFloats_;
+  std::vector<FloatInfo> rightFloats_;
 };
 
 } // namespace layout

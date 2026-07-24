@@ -245,10 +245,14 @@ private:
   bool isInlineFormattingContext(LayoutBoxPtr box) {
     bool hasInline = false;
     for (auto child : box->children()) {
+      // Float elements are inline-level but formatted in BFC context.
+      // They don't prevent IFC formation on the parent.
+      if (child->style().cssFloat != css::Float::None)
+        continue;
+
       if (child->type() == BoxType::BlockNode ||
           child->type() == BoxType::AnonymousBlock) {
-        return false; // Contains block, so it's a BFC (mixed content handled by
-                      // anon blocks or ignored)
+        return false; // Contains block, so it's a BFC
       }
       // inline-block is an atomic inline-level box (CSS §9.2.4): it
       // participates in the inline formatting context just like text and
@@ -263,10 +267,68 @@ private:
     return hasInline;
   }
 
+  // Legacy member kept for backward compat with IFC computeFloatInsets
   std::vector<LayoutBoxPtr> activeFloats_;
+
+  /// Find the lowest Y where a new float can be placed without overlapping.
+  float findFloatPosition(const std::vector<FloatInfo> &floats,
+                          float containerWidth, float newW, float newH,
+                          float startY, bool isLeft) const {
+    float y = startY;
+    for (int iter = 0; iter < 50; ++iter) {
+      bool fits = true;
+      for (const auto &f : floats) {
+        if (y < f.y + f.height && y + newH > f.y) {
+          if (isLeft) {
+            if (newW > f.x && 0 < f.x + f.width) {
+              y = f.y + f.height;
+              fits = false;
+              break;
+            }
+          } else {
+            float fLeft = containerWidth - f.width;
+            float newLeft = containerWidth - newW;
+            if (newLeft < fLeft + f.width && newLeft + newW > fLeft) {
+              y = f.y + f.height;
+              fits = false;
+              break;
+            }
+          }
+        }
+      }
+      if (fits)
+        return y;
+    }
+    return y;
+  }
+
+  /// Advance currentY past all floats matching the clear direction.
+  float clearFloats(float currentY,
+                    const std::vector<FloatInfo> &leftFloats,
+                    const std::vector<FloatInfo> &rightFloats,
+                    css::Clear clear) const {
+    float clearY = currentY;
+    if (clear == css::Clear::Left || clear == css::Clear::Both) {
+      for (const auto &f : leftFloats) {
+        float bottom = f.y + f.height;
+        if (bottom > clearY)
+          clearY = bottom;
+      }
+    }
+    if (clear == css::Clear::Right || clear == css::Clear::Both) {
+      for (const auto &f : rightFloats) {
+        float bottom = f.y + f.height;
+        if (bottom > clearY)
+          clearY = bottom;
+      }
+    }
+    return clearY;
+  }
 
   void layoutBlock(LayoutBoxPtr box) {
     float currentY = 0;
+    std::vector<FloatInfo> leftFloats;
+    std::vector<FloatInfo> rightFloats;
 
     for (auto child : box->children()) {
       if (child->style().position == css::Position::Absolute ||
@@ -274,39 +336,80 @@ private:
         continue;
       }
 
+      // Handle clear: advance currentY past the relevant floats
+      if (child->style().clear != css::Clear::None) {
+        currentY = clearFloats(currentY, leftFloats, rightFloats,
+                               child->style().clear);
+      }
+
       layoutBox(child, box->dimensions());
 
-      float childOuterWidth = child->dimensions().margin.left + child->dimensions().border.left +
-                              child->dimensions().padding.left + child->dimensions().content.width +
-                              child->dimensions().padding.right + child->dimensions().border.right +
-                              child->dimensions().margin.right;
-      float childOuterHeight = child->dimensions().margin.top + child->dimensions().border.top +
-                               child->dimensions().padding.top + child->dimensions().content.height +
-                               child->dimensions().padding.bottom + child->dimensions().border.bottom +
-                               child->dimensions().margin.bottom;
+      float childOuterWidth =
+          child->dimensions().margin.left + child->dimensions().border.left +
+          child->dimensions().padding.left + child->dimensions().content.width +
+          child->dimensions().padding.right + child->dimensions().border.right +
+          child->dimensions().margin.right;
+      float childOuterHeight =
+          child->dimensions().margin.top + child->dimensions().border.top +
+          child->dimensions().padding.top + child->dimensions().content.height +
+          child->dimensions().padding.bottom +
+          child->dimensions().border.bottom +
+          child->dimensions().margin.bottom;
+
+      float parentContentX = box->dimensions().padding.left +
+                             box->dimensions().border.left;
+      float parentContentY = box->dimensions().padding.top +
+                             box->dimensions().border.top;
 
       if (child->style().cssFloat == css::Float::Left) {
-        child->dimensions().content.x = box->dimensions().padding.left + child->dimensions().margin.left +
-                                        child->dimensions().border.left + child->dimensions().padding.left;
-        child->dimensions().content.y = box->dimensions().padding.top + currentY + child->dimensions().margin.top +
-                                        child->dimensions().border.top + child->dimensions().padding.top;
-        activeFloats_.push_back(child);
-      } else if (child->style().cssFloat == css::Float::Right) {
-        child->dimensions().content.x = box->dimensions().padding.left + box->dimensions().content.width - 
-                                        childOuterWidth + child->dimensions().margin.left +
-                                        child->dimensions().border.left + child->dimensions().padding.left;
-        child->dimensions().content.y = box->dimensions().padding.top + currentY + child->dimensions().margin.top +
-                                        child->dimensions().border.top + child->dimensions().padding.top;
-        activeFloats_.push_back(child);
-      } else {
-        child->dimensions().content.x =
-            box->dimensions().padding.left + child->dimensions().margin.left +
-            child->dimensions().border.left + child->dimensions().padding.left;
+        float floatY = findFloatPosition(leftFloats,
+                                         box->dimensions().content.width,
+                                         childOuterWidth, childOuterHeight,
+                                         currentY, true);
 
-        child->dimensions().content.y = box->dimensions().padding.top + currentY +
-                                        child->dimensions().margin.top +
-                                        child->dimensions().border.top +
-                                        child->dimensions().padding.top;
+        child->dimensions().content.x =
+            parentContentX + child->dimensions().margin.left;
+        child->dimensions().content.y =
+            parentContentY + floatY + child->dimensions().margin.top;
+        child->setFloat(true);
+
+        FloatInfo fi;
+        fi.box = child;
+        fi.x = child->dimensions().content.x - child->dimensions().margin.left;
+        fi.y = child->dimensions().content.y - child->dimensions().margin.top;
+        fi.width = childOuterWidth;
+        fi.height = childOuterHeight;
+        fi.isLeft = true;
+        leftFloats.push_back(fi);
+
+      } else if (child->style().cssFloat == css::Float::Right) {
+        float floatY = findFloatPosition(rightFloats,
+                                         box->dimensions().content.width,
+                                         childOuterWidth, childOuterHeight,
+                                         currentY, false);
+
+        child->dimensions().content.x =
+            parentContentX + box->dimensions().content.width -
+            childOuterWidth + child->dimensions().margin.left;
+        child->dimensions().content.y =
+            parentContentY + floatY + child->dimensions().margin.top;
+        child->setFloat(true);
+
+        FloatInfo fi;
+        fi.box = child;
+        fi.x = child->dimensions().content.x - child->dimensions().margin.left;
+        fi.y = child->dimensions().content.y - child->dimensions().margin.top;
+        fi.width = childOuterWidth;
+        fi.height = childOuterHeight;
+        fi.isLeft = false;
+        rightFloats.push_back(fi);
+
+      } else {
+        // Normal flow child
+        child->dimensions().content.x =
+            parentContentX + child->dimensions().margin.left;
+        child->dimensions().content.y =
+            parentContentY + currentY + child->dimensions().margin.top;
 
         currentY += childOuterHeight;
       }
@@ -320,6 +423,16 @@ private:
         layoutFixedBox(child);
       }
     }
+
+    // Store float lists on the box for IFC and height calculation
+    box->setActiveFloats(leftFloats, rightFloats);
+
+    // Update legacy activeFloats_ for IFC backward compat
+    activeFloats_.clear();
+    for (const auto &fi : leftFloats)
+      activeFloats_.push_back(fi.box);
+    for (const auto &fi : rightFloats)
+      activeFloats_.push_back(fi.box);
 
     sortByZIndex(box);
   }
@@ -398,11 +511,9 @@ private:
   }
 
   void layoutInline(LayoutBoxPtr box) {
-    // Delegate to the dedicated IFC implementation. It owns line breaking,
-    // vertical alignment, white-space handling, and atomic inline-level
-    // box layout; we just hand it our active floats so it can size lines
-    // around intruding floats established by ancestor BFCs.
-    InlineFormattingContext ifc(activeFloats_);
+    // Pass the BFC's float lists to the IFC so it can size lines
+    // around intruding floats.
+    InlineFormattingContext ifc(box->leftFloats(), box->rightFloats());
     ifc.layout(*this, box);
   }
 
@@ -492,12 +603,29 @@ private:
         for (const auto &line : box->lineBoxes()) {
           height += line.height();
         }
+        // Also account for floats that extend below the line boxes
+        for (const auto &f : box->leftFloats()) {
+          float bottom = f.y + f.height -
+                         box->dimensions().padding.top -
+                         box->dimensions().border.top;
+          if (bottom > height)
+            height = bottom;
+        }
+        for (const auto &f : box->rightFloats()) {
+          float bottom = f.y + f.height -
+                         box->dimensions().padding.top -
+                         box->dimensions().border.top;
+          if (bottom > height)
+            height = bottom;
+        }
         box->dimensions().content.height = height;
       } else {
-        // Height = bottom of last child
+        // BFC: max of last normal-flow child bottom and float bottoms
         for (auto child : box->children()) {
-          // child->dimensions().content.y is relative to parent's border box.
-          // childBottom is also relative to parent's border box.
+          // Skip floated children — they're handled separately
+          if (child->style().cssFloat != css::Float::None)
+            continue;
+
           float childBottom = child->dimensions().content.y +
                               child->dimensions().content.height +
                               child->dimensions().padding.bottom +
@@ -505,6 +633,18 @@ private:
 
           if (childBottom > height)
             height = childBottom;
+        }
+
+        // Check float overflow
+        for (const auto &f : box->leftFloats()) {
+          float bottom = f.y + f.height;
+          if (bottom > height)
+            height = bottom;
+        }
+        for (const auto &f : box->rightFloats()) {
+          float bottom = f.y + f.height;
+          if (bottom > height)
+            height = bottom;
         }
 
         // Parent's content height = max(childBottom) - padding.top - border.top
@@ -982,6 +1122,19 @@ inline void InlineFormattingContext::computeFloatInsets(
     float &leftFloatWidth, float &rightFloatWidth) const {
   leftFloatWidth = 0;
   rightFloatWidth = 0;
+
+  // Prefer the new FloatInfo lists if available
+  if (!leftFloats_.empty() || !rightFloats_.empty()) {
+    for (const auto &fi : leftFloats_) {
+      leftFloatWidth = std::max(leftFloatWidth, fi.width);
+    }
+    for (const auto &fi : rightFloats_) {
+      rightFloatWidth = std::max(rightFloatWidth, fi.width);
+    }
+    return;
+  }
+
+  // Legacy fallback: read from activeFloats_ LayoutBoxPtr list
   for (const auto &floatBox : activeFloats_) {
     if (!floatBox)
       continue;

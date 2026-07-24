@@ -35,9 +35,13 @@ class LayoutAlgorithm;
 /// helpers, made accessible via friendship).
 class InlineFormattingContext {
 public:
-  /// Construct an IFC. `activeFloats` is the set of floats established by
-  /// ancestor BFCs that intrude into the inline content area; they reduce
-  /// the available width on the lines they overlap.
+  /// Construct an IFC from FloatInfo lists (new API).
+  explicit InlineFormattingContext(std::vector<FloatInfo> leftFloats = {},
+                                   std::vector<FloatInfo> rightFloats = {})
+      : leftFloats_(std::move(leftFloats)),
+        rightFloats_(std::move(rightFloats)) {}
+
+  /// Legacy constructor for backward compat.
   explicit InlineFormattingContext(std::vector<LayoutBoxPtr> activeFloats = {})
       : activeFloats_(std::move(activeFloats)) {}
 
@@ -87,6 +91,8 @@ private:
                  float startX) const;
 
   std::vector<LayoutBoxPtr> activeFloats_;
+  std::vector<FloatInfo> leftFloats_;
+  std::vector<FloatInfo> rightFloats_;
 };
 
 } // namespace layout
