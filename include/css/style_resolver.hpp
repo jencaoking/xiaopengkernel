@@ -282,6 +282,8 @@ private:
   }
 
   bool matchPseudoElement(dom::ElementPtr element, const std::string &name) {
+    (void)element;
+    (void)name;
     // Pseudo-elements like ::before, ::after, ::first-line, ::first-letter
     // These are typically handled during rendering
     // For matching purposes, we consider them to match

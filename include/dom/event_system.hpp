@@ -61,6 +61,12 @@ private:
 // EventSystem handles complete W3C event flow
 class EventSystem {
 public:
+  using EventDispatchCallback = std::function<void(NodePtr, const std::shared_ptr<Event>&, EventPhase)>;
+
+  static void setEventDispatchCallback(EventDispatchCallback cb) {
+    s_eventDispatchCallback = cb;
+  }
+
   // Dispatch an event with complete capture -> target -> bubble flow
   // Returns true if the event was prevented default
   static bool dispatchEvent(NodePtr target, const std::shared_ptr<Event> &event) {
@@ -116,9 +122,12 @@ private:
                                    const std::shared_ptr<Event> &event,
                                    EventPhase phase) {
     event->setCurrentTarget(node);
-    // The actual callback invocation will happen in the ScriptEngine
-    // or EventBinding layer with QuickJS
+    if (s_eventDispatchCallback) {
+      s_eventDispatchCallback(node, event, phase);
+    }
   }
+
+  static inline EventDispatchCallback s_eventDispatchCallback;
 };
 
 } // namespace dom

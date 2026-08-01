@@ -1,6 +1,7 @@
 #include <iostream>
 #include <script/script_engine.hpp>
 #include <vector>
+#include <dom/event_system.hpp>
 
 namespace xiaopeng {
 namespace script {
@@ -12,6 +13,7 @@ ScriptEngine::~ScriptEngine() {
   TimerBinding::cleanup();
   EventBinding::cleanup();
   DOMBinding::cleanup();
+  dom::EventSystem::setEventDispatchCallback(nullptr);
   if (m_ctx)
     JS_FreeContext(m_ctx);
   if (m_runtime)
@@ -42,6 +44,30 @@ bool ScriptEngine::initialize() {
   ConsoleBinding::registerBinding(m_ctx);
   TimerBinding::registerBinding(m_ctx);
   DOMBinding::registerBinding(m_ctx);
+
+  dom::EventSystem::setEventDispatchCallback([this](dom::NodePtr node, const std::shared_ptr<dom::Event> &event, dom::EventPhase phase) {
+    if (!this->m_ctx || !node) return;
+    const auto *listenerIds = node->getEventListeners(event->type());
+    if (listenerIds && !listenerIds->empty()) {
+      JSValue eventObj = EventBinding::createEventObject(this->m_ctx, event->type());
+      
+      if (event->target()) {
+        JSValue targetVal = DOMBinding::wrapNode(this->m_ctx, event->target());
+        JS_SetPropertyStr(this->m_ctx, eventObj, "target", targetVal);
+      }
+      if (event->currentTarget()) {
+        JSValue currentTargetVal = DOMBinding::wrapNode(this->m_ctx, event->currentTarget());
+        JS_SetPropertyStr(this->m_ctx, eventObj, "currentTarget", currentTargetVal);
+      }
+      
+      JS_SetPropertyStr(this->m_ctx, eventObj, "bubbles", JS_NewBool(this->m_ctx, event->bubbles()));
+      JS_SetPropertyStr(this->m_ctx, eventObj, "cancelable", JS_NewBool(this->m_ctx, event->cancelable()));
+      JS_SetPropertyStr(this->m_ctx, eventObj, "eventPhase", JS_NewInt32(this->m_ctx, static_cast<int32_t>(phase)));
+      
+      EventBinding::dispatch(this->m_ctx, *listenerIds, eventObj);
+      JS_FreeValue(this->m_ctx, eventObj);
+    }
+  });
 
   return true;
 #else

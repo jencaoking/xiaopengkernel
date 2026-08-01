@@ -165,15 +165,19 @@ public:
   }
 
   // ── wrapElement ─────────────────────────────────────────────
-  static JSValue wrapElement(JSContext *ctx, dom::Element *element) {
-    if (!element)
-      return JS_NULL;
-
+  static JSValue wrapElement(JSContext *ctx, dom::Element *el) {
+    if (!el) return JS_NULL;
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        try {
+            s_createdNodes.push_back(el->shared_from_this());
+        } catch(...) {}
+    }
     JSValue obj = JS_NewObjectClass(ctx, s_elementClassId);
     if (JS_IsException(obj))
       return obj;
 
-    JS_SetOpaque(obj, element);
+    JS_SetOpaque(obj, el);
 
     // --- Existing properties ---
     bindGetSet(ctx, obj, "innerHTML",
@@ -253,15 +257,19 @@ public:
   }
 
   // ── wrapTextNode ────────────────────────────────────────────
-  static JSValue wrapTextNode(JSContext *ctx, dom::TextNode *textNode) {
-    if (!textNode)
-      return JS_NULL;
-
+  static JSValue wrapTextNode(JSContext *ctx, dom::TextNode *node) {
+    if (!node) return JS_NULL;
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        try {
+            s_createdNodes.push_back(node->shared_from_this());
+        } catch(...) {}
+    }
     JSValue obj = JS_NewObjectClass(ctx, s_textNodeClassId);
     if (JS_IsException(obj))
       return obj;
 
-    JS_SetOpaque(obj, textNode);
+    JS_SetOpaque(obj, node);
 
     // Node properties
     bindReadOnly(ctx, obj, "parentNode",    node_get_parentNode);
@@ -296,6 +304,7 @@ private:
 
   // ── Helper: get Node* from either element or text class ──
   static dom::Node *getNodeFromThis(JSContext *ctx, JSValueConst this_val) {
+    (void)ctx;
     dom::Node *node = (dom::Node *)JS_GetOpaque(this_val, s_elementClassId);
     if (!node)
       node = (dom::Node *)JS_GetOpaque(this_val, s_textNodeClassId);
@@ -328,6 +337,7 @@ private:
     JS_FreeAtom(ctx, atom);
   }
 
+public:
   // ── Helper: wrap child node (Element or TextNode) ──
   static JSValue wrapNode(JSContext *ctx, dom::NodePtr node) {
     if (!node)
@@ -376,6 +386,7 @@ private:
   // ══════════════════════════════════════════════════════════
 
   static dom::Document *getDoc(JSContext *ctx, JSValueConst this_val) {
+    (void)ctx;
     return (dom::Document *)JS_GetOpaque(this_val, s_documentClassId);
   }
 
@@ -430,6 +441,7 @@ private:
     if (!el) return JS_NULL;
     {
       std::lock_guard<std::mutex> lock(s_mutex);
+      s_createdNodes.push_back(el);
       s_createdElements.push_back(el);
       if (s_createdElements.size() > 100) {
         auto it = s_createdElements.begin();
@@ -1063,14 +1075,20 @@ private:
   static JSValue element_removeChild(JSContext *ctx, JSValueConst this_val,
                                       int argc, JSValueConst *argv) {
     dom::Node *parent = getNodeFromThis(ctx, this_val);
-    if (!parent || argc < 1) return JS_EXCEPTION;
+    if (!parent || argc < 1) {
+        JS_ThrowTypeError(ctx, "Invalid parent or missing arguments");
+        return JS_EXCEPTION;
+    }
 
     // Try Element child
     dom::Element *child = (dom::Element *)JS_GetOpaque(argv[0], s_elementClassId);
     if (child) {
       try {
         parent->removeChild(child->shared_from_this());
-      } catch (...) { return JS_EXCEPTION; }
+      } catch (...) { 
+          JS_ThrowInternalError(ctx, "Failed to remove element child");
+          return JS_EXCEPTION; 
+      }
       return JS_DupValue(ctx, argv[0]);
     }
 
@@ -1079,10 +1097,14 @@ private:
     if (textChild) {
       try {
         parent->removeChild(textChild->shared_from_this());
-      } catch (...) { return JS_EXCEPTION; }
+      } catch (...) { 
+          JS_ThrowInternalError(ctx, "Failed to remove text child");
+          return JS_EXCEPTION; 
+      }
       return JS_DupValue(ctx, argv[0]);
     }
 
+    JS_ThrowTypeError(ctx, "Argument is not a Node");
     return JS_EXCEPTION;
   }
 
@@ -1112,11 +1134,14 @@ private:
     if (!JS_IsNull(argv[1]) && !JS_IsUndefined(argv[1])) {
       dom::Element *refEl = (dom::Element *)JS_GetOpaque(argv[1], s_elementClassId);
       if (refEl) {
-        try { refNode = refEl->shared_from_this(); } catch (...) { return JS_EXCEPTION; }
+        try { refNode = refEl->shared_from_this(); } catch (...) { JS_ThrowInternalError(ctx, "err"); return JS_EXCEPTION; }
       } else {
         dom::TextNode *refText = (dom::TextNode *)JS_GetOpaque(argv[1], s_textNodeClassId);
         if (refText) {
-          try { refNode = refText->shared_from_this(); } catch (...) { return JS_EXCEPTION; }
+          try { refNode = refText->shared_from_this(); } catch (...) { JS_ThrowInternalError(ctx, "err"); return JS_EXCEPTION; }
+        } else {
+          JS_ThrowTypeError(ctx, "Reference child is not a Node");
+          return JS_EXCEPTION;
         }
       }
     }
@@ -1131,28 +1156,31 @@ private:
   static JSValue element_replaceChild(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv) {
     dom::Node *parent = getNodeFromThis(ctx, this_val);
-    if (!parent || argc < 2) return JS_EXCEPTION;
+    if (!parent || argc < 2) {
+        JS_ThrowTypeError(ctx, "Invalid parent or missing arguments");
+        return JS_EXCEPTION;
+    }
 
     // Get new child
     dom::NodePtr newChild;
     dom::Element *newEl = (dom::Element *)JS_GetOpaque(argv[0], s_elementClassId);
     if (newEl) {
-      try { newChild = newEl->shared_from_this(); } catch (...) { return JS_EXCEPTION; }
+      try { newChild = newEl->shared_from_this(); } catch (...) { JS_ThrowInternalError(ctx, "err"); return JS_EXCEPTION; }
     } else {
       dom::TextNode *newText = (dom::TextNode *)JS_GetOpaque(argv[0], s_textNodeClassId);
-      if (newText) { try { newChild = newText->shared_from_this(); } catch (...) { return JS_EXCEPTION; } }
-      else return JS_EXCEPTION;
+      if (newText) { try { newChild = newText->shared_from_this(); } catch (...) { JS_ThrowInternalError(ctx, "err"); return JS_EXCEPTION; } }
+      else { JS_ThrowTypeError(ctx, "New child is not a Node"); return JS_EXCEPTION; }
     }
 
     // Get old child
     dom::NodePtr oldChild;
     dom::Element *oldEl = (dom::Element *)JS_GetOpaque(argv[1], s_elementClassId);
     if (oldEl) {
-      try { oldChild = oldEl->shared_from_this(); } catch (...) { return JS_EXCEPTION; }
+      try { oldChild = oldEl->shared_from_this(); } catch (...) { JS_ThrowInternalError(ctx, "err"); return JS_EXCEPTION; }
     } else {
       dom::TextNode *oldText = (dom::TextNode *)JS_GetOpaque(argv[1], s_textNodeClassId);
-      if (oldText) { try { oldChild = oldText->shared_from_this(); } catch (...) { return JS_EXCEPTION; } }
-      else return JS_EXCEPTION;
+      if (oldText) { try { oldChild = oldText->shared_from_this(); } catch (...) { JS_ThrowInternalError(ctx, "err"); return JS_EXCEPTION; } }
+      else { JS_ThrowTypeError(ctx, "Old child is not a Node"); return JS_EXCEPTION; }
     }
 
     parent->replaceChild(newChild, oldChild);
@@ -1165,7 +1193,10 @@ private:
                                  int argc, JSValueConst *argv) {
     (void)argc; (void)argv;
     dom::Node *node = getNodeFromThis(ctx, this_val);
-    if (!node) return JS_EXCEPTION;
+    if (!node) {
+        JS_ThrowTypeError(ctx, "Invalid node");
+        return JS_EXCEPTION;
+    }
 
     auto parent = node->parentNode();
     if (parent) {
@@ -1210,7 +1241,8 @@ private:
 
   // ── NEW: element.isEqualNode(otherNode) ──
   static JSValue element_isEqualNode(JSContext *ctx, JSValueConst this_val,
-                                      int argc, JSValueConst *argv) {
+                                     int argc, JSValueConst *argv) {
+    (void)ctx;
     dom::Element *el = (dom::Element *)JS_GetOpaque(this_val, s_elementClassId);
     if (!el || argc < 1) return JS_EXCEPTION;
 
