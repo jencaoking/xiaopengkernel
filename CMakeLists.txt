@@ -86,24 +86,40 @@ endif()
 
 
 # FreeType and HarfBuzz support (bundled in third_party)
-set(FREETYPE_ROOT "${CMAKE_SOURCE_DIR}/third_party/freetype")
-set(HARFBUZZ_ROOT "${CMAKE_SOURCE_DIR}/third_party/harfbuzz")
-option(ENABLE_FREETYPE "Enable FreeType and HarfBuzz support" ON)
-
-if(ENABLE_FREETYPE AND EXISTS "${FREETYPE_ROOT}/lib/libfreetype.a" AND EXISTS "${HARFBUZZ_ROOT}/lib/libharfbuzz.a")
-    add_compile_definitions(ENABLE_FREETYPE)
-    include_directories(
-        "${FREETYPE_ROOT}/include/freetype2"
-        "${HARFBUZZ_ROOT}/include/harfbuzz"
-    )
-    set(FREETYPE_LIBRARIES
-        "${HARFBUZZ_ROOT}/lib/libharfbuzz.a"
-        "${FREETYPE_ROOT}/lib/libfreetype.a"
-    )
-    message(STATUS "FreeType and HarfBuzz enabled (bundled)")
-elseif(ENABLE_FREETYPE)
-    message(WARNING "ENABLE_FREETYPE is ON but libraries not found in third_party/. Disabling.")
-    set(ENABLE_FREETYPE OFF)
+if(ENABLE_FREETYPE)
+    if(MINGW_BUILD)
+        set(FREETYPE_ROOT "${CMAKE_SOURCE_DIR}/third_party/freetype")
+        set(HARFBUZZ_ROOT "${CMAKE_SOURCE_DIR}/third_party/harfbuzz")
+        if(EXISTS "${FREETYPE_ROOT}/lib/libfreetype.a" AND EXISTS "${HARFBUZZ_ROOT}/lib/libharfbuzz.a")
+            add_compile_definitions(ENABLE_FREETYPE)
+            include_directories(
+                "${FREETYPE_ROOT}/include/freetype2"
+                "${HARFBUZZ_ROOT}/include/harfbuzz"
+            )
+            set(FREETYPE_LIBRARIES
+                "${HARFBUZZ_ROOT}/lib/libharfbuzz.a"
+                "${FREETYPE_ROOT}/lib/libfreetype.a"
+            )
+            message(STATUS "FreeType and HarfBuzz enabled (bundled)")
+        else()
+            message(WARNING "ENABLE_FREETYPE is ON but libraries not found in third_party/. Disabling.")
+            set(ENABLE_FREETYPE OFF)
+        endif()
+    else()
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(FREETYPE freetype2)
+        pkg_check_modules(HARFBUZZ harfbuzz)
+        if(FREETYPE_FOUND AND HARFBUZZ_FOUND)
+            add_compile_definitions(ENABLE_FREETYPE)
+            include_directories(${FREETYPE_INCLUDE_DIRS} ${HARFBUZZ_INCLUDE_DIRS})
+            # combine the two libraries for target_link_libraries
+            set(FREETYPE_LIBRARIES ${HARFBUZZ_LIBRARIES} ${FREETYPE_LIBRARIES})
+            message(STATUS "FreeType and HarfBuzz enabled (system)")
+        else()
+            message(WARNING "ENABLE_FREETYPE is ON but system libraries not found. Disabling.")
+            set(ENABLE_FREETYPE OFF)
+        endif()
+    endif()
 endif()
 
 # OpenGL Configuration (GPU accelerated rendering)
