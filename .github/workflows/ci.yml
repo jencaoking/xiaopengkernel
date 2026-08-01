@@ -1,0 +1,83 @@
+name: CI Build and Test
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 矩阵构建配置，同时覆盖 Linux 和 Windows
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    # --- 0. 缓存 CMake 构建目录（增量构建加速） ---
+    - name: Cache CMake build directory
+      uses: actions/cache@v4
+      with:
+        # 缓存 CMake 生成的 build 目录，命中后仅重新编译变更的目标
+        path: build/
+        # key 绑定 OS 与 CMakeLists 内容：配置变更时自动失效并重建缓存
+        key: ${{ runner.os }}-cmake-build-${{ hashFiles('CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-cmake-build-
+
+    # --- 1. Linux 构建依赖 ---
+    - name: Install System Dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake gcc g++ build-essential
+
+    # --- 2. Windows MinGW 构建依赖 ---
+    - name: Setup MinGW (Windows)
+      if: runner.os == 'Windows'
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+
+    # --- 配置 CMake ---
+    - name: Configure CMake (Linux)
+      if: runner.os == 'Linux'
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Configure CMake (Windows MinGW)
+      if: runner.os == 'Windows'
+      # 在 Windows 下使用 MinGW Makefiles 并通过选项启用 third_party 依赖
+      run: cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DUSE_THIRD_PARTY=ON
+
+    # --- 执行构建 ---
+    - name: Build
+      run: cmake --build build --config Release -j 4
+
+    # --- 运行测试 ---
+    - name: Run Tests (ctest)
+      working-directory: build
+      # 失败时显示详细日志：使用 --output-on-failure 和 --verbose
+      run: ctest -C Release --output-on-failure --verbose
+
+    # --- 上传构建产物 ---
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      # 即使构建或测试失败，也上传产物以便排查日志
+      if: always()
+      with:
+        name: build-artifacts-${{ runner.os }}
+        path: |
+          build/
+          !build/CMakeFiles/
+          !build/**/*.o
+          !build/**/*.obj
+          !build/**/*.a
+        retention-days: 5
