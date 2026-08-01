@@ -34,6 +34,7 @@ if(MINGW_BUILD)
         include_directories(${SDL2_INCLUDE_DIR})
         add_compile_definitions(ENABLE_SDL)
         message(STATUS "SDL2 found at ${SDL2_ROOT}")
+        set(XPK_SDL_LINK_LIBRARIES mingw32 ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY} winmm gdi32 imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32 user32)
     else()
         message(WARNING "SDL2 not found at ${SDL2_ROOT}. Window support will be disabled.")
     endif()
@@ -43,6 +44,7 @@ else()
         include_directories(${SDL2_INCLUDE_DIRS})
         add_compile_definitions(ENABLE_SDL)
         message(STATUS "SDL2 found (system): ${SDL2_INCLUDE_DIRS}")
+        set(XPK_SDL_LINK_LIBRARIES ${SDL2_LIBRARIES})
     else()
         message(WARNING "SDL2 not found. Window support will be disabled.")
     endif()
@@ -234,22 +236,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 endif()
 
-if(EXISTS "${SDL2_ROOT}")
+if(EXISTS "${SDL2_ROOT}" OR SDL2_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE 
-        mingw32
-        ${SDL2_MAIN_LIBRARY}
-        ${SDL2_LIBRARY}
-        winmm
-        gdi32
-        imm32
-        ole32
-        oleaut32
-        version
-        uuid
-        advapi32
-        setupapi
-        shell32
-        user32
+        ${XPK_SDL_LINK_LIBRARIES}
     )
 endif()
 
@@ -274,20 +263,8 @@ if(OPENGL_FOUND)
     target_include_directories(test_opengl PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(test_opengl PRIVATE SDL_MAIN_HANDLED)
     target_link_libraries(test_opengl PRIVATE 
-        ${SDL2_MAIN_LIBRARY}
-        ${SDL2_LIBRARY}
+        ${XPK_SDL_LINK_LIBRARIES}
         ${XPK_OPENGL_LIBRARIES}
-        winmm
-        gdi32
-        imm32
-        ole32
-        oleaut32
-        version
-        uuid
-        advapi32
-        setupapi
-        shell32
-        user32
     )
     set_target_properties(test_opengl PROPERTIES 
         WIN32_EXECUTABLE FALSE
@@ -299,20 +276,8 @@ if(OPENGL_FOUND)
     target_include_directories(simple_opengl_demo PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(simple_opengl_demo PRIVATE SDL_MAIN_HANDLED)
     target_link_libraries(simple_opengl_demo PRIVATE 
-        ${SDL2_MAIN_LIBRARY}
-        ${SDL2_LIBRARY}
+        ${XPK_SDL_LINK_LIBRARIES}
         ${XPK_OPENGL_LIBRARIES}
-        winmm
-        gdi32
-        imm32
-        ole32
-        oleaut32
-        version
-        uuid
-        advapi32
-        setupapi
-        shell32
-        user32
     )
     set_target_properties(simple_opengl_demo PROPERTIES 
         WIN32_EXECUTABLE FALSE
@@ -324,20 +289,8 @@ if(OPENGL_FOUND)
     target_include_directories(test_gpu_acceleration PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(test_gpu_acceleration PRIVATE SDL_MAIN_HANDLED)
     target_link_libraries(test_gpu_acceleration PRIVATE 
-        ${SDL2_MAIN_LIBRARY}
-        ${SDL2_LIBRARY}
+        ${XPK_SDL_LINK_LIBRARIES}
         ${XPK_OPENGL_LIBRARIES}
-        winmm
-        gdi32
-        imm32
-        ole32
-        oleaut32
-        version
-        uuid
-        advapi32
-        setupapi
-        shell32
-        user32
     )
     set_target_properties(test_gpu_acceleration PROPERTIES 
         WIN32_EXECUTABLE FALSE
@@ -413,10 +366,9 @@ endfunction()
 
 # Helper: add SDL2 to a test target
 function(add_xpk_test_sdl target_name)
-    if(EXISTS "${SDL2_ROOT}")
+    if(EXISTS "${SDL2_ROOT}" OR SDL2_FOUND)
         target_link_libraries(${target_name} PRIVATE
-            mingw32 ${SDL2_MAIN_LIBRARY} ${SDL2_LIBRARY}
-            winmm gdi32 imm32 ole32 oleaut32 version uuid advapi32 setupapi shell32 user32
+            ${XPK_SDL_LINK_LIBRARIES}
         )
         target_compile_definitions(${target_name} PRIVATE SDL_MAIN_HANDLED)
     endif()
@@ -519,22 +471,8 @@ target_link_libraries(minimal_demo PRIVATE
 else()
 target_link_libraries(minimal_demo PRIVATE ${CURL_LIBRARY})
 endif()
-if(EXISTS "${SDL2_ROOT}")
-  target_link_libraries(minimal_demo PRIVATE mingw32
-      ${SDL2_MAIN_LIBRARY}
-      ${SDL2_LIBRARY}
-      winmm
-      gdi32
-      imm32
-      ole32
-      oleaut32
-      version
-      uuid
-      advapi32
-      setupapi
-      shell32
-      user32
-  )
+if(EXISTS "${SDL2_ROOT}" OR SDL2_FOUND)
+  target_link_libraries(minimal_demo PRIVATE ${XPK_SDL_LINK_LIBRARIES})
 endif()
 if(OPENGL_FOUND)
   target_link_libraries(minimal_demo PRIVATE ${XPK_OPENGL_LIBRARIES})
