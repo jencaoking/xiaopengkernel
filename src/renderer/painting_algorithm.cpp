@@ -28,7 +28,7 @@ PaintLayerPtr PaintingAlgorithm::buildLayerTree(layout::LayoutBoxPtr root) {
 
 void PaintingAlgorithm::collectLayers(layout::LayoutBoxPtr box, PaintLayerPtr currentLayer) {
   for (const auto &child : box->children()) {
-    if (PaintLayer::createsStackingContext(child)) {
+    if (child->createsStackingContext()) {
       auto childLayer = std::make_shared<PaintLayer>(child);
       currentLayer->addStackingContextChild(childLayer);
       collectLayers(child, childLayer);
@@ -63,32 +63,58 @@ void PaintingAlgorithm::paintLayer(PaintLayerPtr layer, Canvas &canvas, int dumm
   getParentBorderBox(box, px, py);
 
   // 1. Paint background and borders of this layer's element
-  paintBox(box, canvas, px, py);
+  paintBox(box, canvas, px, py, PaintPhase::BackgroundAndBorders);
 
   // 2. Paint child layers with negative z-index
   for (const auto &childLayer : layer->negZOrderList()) {
     paintLayer(childLayer, canvas, 0, 0);
   }
 
-  // 3. Paint normal flow children
+  // 3. Paint normal flow children block backgrounds and borders
   for (const auto &childBox : layer->normalFlowChildren()) {
-    paintNormalFlow(childBox, canvas, 0, 0);
+    if (!childBox->isFloat() && childBox->style().position == css::Position::Static) {
+      paintNormalFlow(childBox, canvas, 0, 0, PaintPhase::BackgroundAndBorders);
+    }
   }
 
-  // 4. Paint child layers with positive (or zero) z-index
+  // 4. Paint floats
+  for (const auto &childBox : layer->normalFlowChildren()) {
+    if (childBox->isFloat()) {
+      paintNormalFlow(childBox, canvas, 0, 0, PaintPhase::Both);
+    }
+  }
+
+  // 5. Paint normal flow inline foregrounds (text and replaced elements)
+  for (const auto &childBox : layer->normalFlowChildren()) {
+    if (!childBox->isFloat() && childBox->style().position == css::Position::Static) {
+      paintNormalFlow(childBox, canvas, 0, 0, PaintPhase::Foreground);
+    }
+  }
+
+  // 6. Paint positioned elements with z-index auto or 0
+  for (const auto &childBox : layer->normalFlowChildren()) {
+    if (childBox->style().position != css::Position::Static) {
+      paintNormalFlow(childBox, canvas, 0, 0, PaintPhase::Both);
+    }
+  }
+
+  // 7. Paint foreground of this layer's element
+  paintBox(box, canvas, px, py, PaintPhase::Foreground);
+
+  // 8. Paint child layers with positive (or zero) z-index
   for (const auto &childLayer : layer->posZOrderList()) {
     paintLayer(childLayer, canvas, 0, 0);
   }
 }
 
-void PaintingAlgorithm::paintNormalFlow(layout::LayoutBoxPtr box, Canvas &canvas, int dummyX, int dummyY) {
+void PaintingAlgorithm::paintNormalFlow(layout::LayoutBoxPtr box, Canvas &canvas, int dummyX, int dummyY, PaintPhase phase) {
   int px = 0, py = 0;
   getParentBorderBox(box, px, py);
-  paintBox(box, canvas, px, py);
+  paintBox(box, canvas, px, py, phase);
 }
 
 void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
-                                 int parentBorderBoxX, int parentBorderBoxY) {
+                                 int parentBorderBoxX, int parentBorderBoxY, PaintPhase phase) {
   const auto &dims = box->dimensions();
   const auto &style = box->style();
 
@@ -136,7 +162,7 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
   }
 
   // --- 1. Draw Background (full border box area) ---
-  if (style.backgroundColor.a > 0) {
+  if ((phase == PaintPhase::BackgroundAndBorders || phase == PaintPhase::Both) && style.backgroundColor.a > 0) {
     int bgX = borderBoxX + static_cast<int>(dims.border.left);
     int bgY = borderBoxY + static_cast<int>(dims.border.top);
     int bgW = static_cast<int>(dims.padding.left + dims.content.width +
@@ -152,32 +178,34 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
     canvas.popClipRect();
   }
 
-  // Top Border
-  if (dims.border.top > 0 && style.borderTopColor.a > 0) {
-    canvas.fillRect(borderBoxX, borderBoxY, borderBoxW,
-                    static_cast<int>(dims.border.top),
-                    toColor(style.borderTopColor));
-  }
+  if (phase == PaintPhase::BackgroundAndBorders || phase == PaintPhase::Both) {
+    // Top Border
+    if (dims.border.top > 0 && style.borderTopColor.a > 0) {
+      canvas.fillRect(borderBoxX, borderBoxY, borderBoxW,
+                      static_cast<int>(dims.border.top),
+                      toColor(style.borderTopColor));
+    }
 
-  // Bottom Border
-  if (dims.border.bottom > 0 && style.borderBottomColor.a > 0) {
-    int by = borderBoxY + borderBoxH - static_cast<int>(dims.border.bottom);
-    canvas.fillRect(borderBoxX, by, borderBoxW,
-                    static_cast<int>(dims.border.bottom),
-                    toColor(style.borderBottomColor));
-  }
+    // Bottom Border
+    if (dims.border.bottom > 0 && style.borderBottomColor.a > 0) {
+      int by = borderBoxY + borderBoxH - static_cast<int>(dims.border.bottom);
+      canvas.fillRect(borderBoxX, by, borderBoxW,
+                      static_cast<int>(dims.border.bottom),
+                      toColor(style.borderBottomColor));
+    }
 
-  // Left Border
-  if (dims.border.left > 0 && style.borderLeftColor.a > 0) {
-    canvas.fillRect(borderBoxX, borderBoxY, static_cast<int>(dims.border.left),
-                    borderBoxH, toColor(style.borderLeftColor));
-  }
+    // Left Border
+    if (dims.border.left > 0 && style.borderLeftColor.a > 0) {
+      canvas.fillRect(borderBoxX, borderBoxY, static_cast<int>(dims.border.left),
+                      borderBoxH, toColor(style.borderLeftColor));
+    }
 
-  // Right Border
-  if (dims.border.right > 0 && style.borderRightColor.a > 0) {
-    int rx = borderBoxX + borderBoxW - static_cast<int>(dims.border.right);
-    canvas.fillRect(rx, borderBoxY, static_cast<int>(dims.border.right),
-                    borderBoxH, toColor(style.borderRightColor));
+    // Right Border
+    if (dims.border.right > 0 && style.borderRightColor.a > 0) {
+      int rx = borderBoxX + borderBoxW - static_cast<int>(dims.border.right);
+      canvas.fillRect(rx, borderBoxY, static_cast<int>(dims.border.right),
+                      borderBoxH, toColor(style.borderRightColor));
+    }
   }
 
   // Re-push clip if needed for content
@@ -196,142 +224,132 @@ void PaintingAlgorithm::paintBox(layout::LayoutBoxPtr box, Canvas &canvas,
   // NOTE: Children are now collected and sorted globally,
   // so we don't recursively paint children here.
 
-  // --- 3.5. Paint Replaced Elements (Images) ---
-  if (box->node() && box->node()->nodeType() == dom::NodeType::Element) {
-    auto elem = std::dynamic_pointer_cast<dom::Element>(box->node());
-    if (elem && elem->localName() == "img") {
-      auto attr = elem->getAttribute("src");
-      if (attr.has_value() && !attr.value().empty()) {
-        std::string src = attr.value();
+  if (phase == PaintPhase::Foreground || phase == PaintPhase::Both) {
+    // --- 3.5. Paint Replaced Elements (Images) ---
+    if (box->node() && box->node()->nodeType() == dom::NodeType::Element) {
+      auto elem = std::dynamic_pointer_cast<dom::Element>(box->node());
+      if (elem && elem->localName() == "img") {
+        auto attr = elem->getAttribute("src");
+        if (attr.has_value() && !attr.value().empty()) {
+          std::string src = attr.value();
 
-        // Cache lookup — avoids per-frame network download + decode
-        std::shared_ptr<Image> image;
-        auto cacheIt = imageCache_.find(src);
-        if (cacheIt != imageCache_.end()) {
-          image = cacheIt->second;
-        } else {
-          image = loader::GetLoader().loadImage(src);
+          // Cache lookup — avoids per-frame network download + decode
+          std::shared_ptr<Image> image;
+          auto cacheIt = imageCache_.find(src);
+          if (cacheIt != imageCache_.end()) {
+            image = cacheIt->second;
+          } else {
+            image = loader::GetLoader().loadImage(src);
+            if (image) {
+              imageCache_[src] = image;
+              std::cout << "[Painter] Cached image: " << src << " ("
+                        << image->width() << "x" << image->height() << ")"
+                        << std::endl;
+            }
+          }
+
           if (image) {
-            imageCache_[src] = image;
-            std::cout << "[Painter] Cached image: " << src << " ("
-                      << image->width() << "x" << image->height() << ")"
-                      << std::endl;
+            int imgX = borderBoxX + static_cast<int>(dims.border.left) +
+                       static_cast<int>(dims.padding.left);
+            int imgY = borderBoxY + static_cast<int>(dims.border.top) +
+                       static_cast<int>(dims.padding.top);
+            canvas.drawImage(*image, imgX, imgY, static_cast<int>(dims.content.width),
+                             static_cast<int>(dims.content.height));
           }
-        }
-
-        if (image) {
-          int imgX = borderBoxX + static_cast<int>(dims.border.left) +
-                     static_cast<int>(dims.padding.left);
-          int imgY = borderBoxY + static_cast<int>(dims.border.top) +
-                     static_cast<int>(dims.padding.top);
-          int imgW = static_cast<int>(dims.content.width);
-          int imgH = static_cast<int>(dims.content.height);
-
-          canvas.drawImage(*image, imgX, imgY, imgW, imgH);
         }
       }
     }
-  }
 
-  // --- 4. Paint Text Fragments (inline content via LineBoxes) ---
-  for (const auto &line : box->lineBoxes()) {
-    // line.y() is relative to parent's border box
-    int lineAbsY = borderBoxY + static_cast<int>(line.y());
+    // --- 4. Paint Inline Text Lines ---
+    if (!box->lineBoxes().empty()) {
+      auto textCol = toColor(style.color);
 
-    for (const auto &frag : line.fragments()) {
-      if (!frag.box)
-        continue;
+      for (const auto &line : box->lineBoxes()) {
+        int lineAbsY = borderBoxY + static_cast<int>(line.y());
 
-      // frag.x is relative to content area start
-      int fragAbsX = borderBoxX + static_cast<int>(dims.border.left) +
-                     static_cast<int>(dims.padding.left) +
-                     static_cast<int>(frag.x);
-      int fragAbsY = lineAbsY + static_cast<int>(frag.y);
+        for (const auto &frag : line.fragments()) {
+          if (!frag.box || !frag.isText)
+            continue;
 
-      if (frag.box->node() &&
-          frag.box->node()->nodeType() == dom::NodeType::Text) {
-        std::string text = frag.box->node()->textContent();
-        if (frag.startOffset < text.length()) {
-          size_t count = frag.endOffset - frag.startOffset;
-          // Clamp count to remaining length
-          if (frag.startOffset + count > text.length()) {
-            count = text.length() - frag.startOffset;
+          int fragAbsX = borderBoxX + static_cast<int>(dims.border.left) +
+                         static_cast<int>(dims.padding.left) +
+                         static_cast<int>(frag.x);
+          int fragAbsY = lineAbsY + static_cast<int>(frag.y);
+          int baselineY = fragAbsY + static_cast<int>(frag.baseline);
+
+          const std::string &textContent = frag.box->node()->textContent();
+          if (frag.startOffset < textContent.length()) {
+            std::string text = textContent.substr(
+                frag.startOffset, frag.endOffset - frag.startOffset);
+
+            const auto &c = frag.box->style().color;
+
+            // Determine scale for fallback or if font size is relative
+            int scale = 1;
+            if (frag.box->node()->parentNode() &&
+                frag.box->node()->parentNode()->nodeType() ==
+                    dom::NodeType::Element) {
+              auto parent = std::dynamic_pointer_cast<dom::Element>(
+                  frag.box->node()->parentNode());
+              if (parent && parent->localName() == "h1") {
+                scale = 2;
+              }
+            }
+
+            if (frag.box->style().fontSize.unit == css::Length::Unit::Px) {
+              canvas.setFont(frag.box->style().fontFamily,
+                             static_cast<int>(frag.box->style().fontSize.value));
+            } else {
+              // Fallback default
+              canvas.setFont(frag.box->style().fontFamily, 16 * scale);
+            }
+
+            canvas.drawTextVector(fragAbsX, fragAbsY, text, toColor(c));
           }
-          text = text.substr(frag.startOffset, count);
-        } else {
-          text = "";
         }
-
-        // Skip empty text fragments
-        if (text.empty())
-          continue;
-
-        const auto &c = frag.box->style().color;
-
-        // Determine scale for fallback or if font size is relative
-        int scale = 1;
-        if (frag.box->node()->parentNode() &&
-            frag.box->node()->parentNode()->nodeType() ==
-                dom::NodeType::Element) {
-          auto parent = std::dynamic_pointer_cast<dom::Element>(
-              frag.box->node()->parentNode());
-          if (parent && parent->localName() == "h1") {
-            scale = 2;
-          }
-        }
-
-        if (frag.box->style().fontSize.unit == css::Length::Unit::Px) {
-          canvas.setFont(frag.box->style().fontFamily,
-                         static_cast<int>(frag.box->style().fontSize.value));
-        } else {
-          // Fallback default
-          canvas.setFont(frag.box->style().fontFamily, 16 * scale);
-        }
-
-        canvas.drawTextVector(fragAbsX, fragAbsY, text, toColor(c));
       }
-    }
-  }
 
-  // --- 4b. Paint text decorations (underline, overline, line-through) ---
-  for (const auto &line : box->lineBoxes()) {
-    int lineAbsY = borderBoxY + static_cast<int>(line.y());
+      // --- 4b. Paint text decorations (underline, overline, line-through) ---
+      for (const auto &line : box->lineBoxes()) {
+        int lineAbsY = borderBoxY + static_cast<int>(line.y());
 
-    for (const auto &frag : line.fragments()) {
-      if (!frag.box || !frag.isText)
-        continue;
-      if (frag.textDecorationLine == css::TextDecorationLine::None)
-        continue;
+        for (const auto &frag : line.fragments()) {
+          if (!frag.box || !frag.isText)
+            continue;
+          if (frag.textDecorationLine == css::TextDecorationLine::None)
+            continue;
 
-      int fragAbsX = borderBoxX + static_cast<int>(dims.border.left) +
-                     static_cast<int>(dims.padding.left) +
-                     static_cast<int>(frag.x);
-      int fragAbsY = lineAbsY + static_cast<int>(frag.y);
-      int fragW = static_cast<int>(frag.width);
-      int fragH = static_cast<int>(frag.height);
-      int baselineY = fragAbsY + static_cast<int>(frag.baseline);
+          int fragAbsX = borderBoxX + static_cast<int>(dims.border.left) +
+                         static_cast<int>(dims.padding.left) +
+                         static_cast<int>(frag.x);
+          int fragAbsY = lineAbsY + static_cast<int>(frag.y);
+          int fragW = static_cast<int>(frag.width);
+          int fragH = static_cast<int>(frag.height);
+          int baselineY = fragAbsY + static_cast<int>(frag.baseline);
 
-      const auto &c = frag.box->style().color;
-      Color decoColor = toColor(c);
+          const auto &c = frag.box->style().color;
+          Color decoColor = toColor(c);
 
-      switch (frag.textDecorationLine) {
-        case css::TextDecorationLine::Underline:
-          // 1px line below baseline
-          canvas.drawLine(fragAbsX, baselineY + 2,
-                          fragAbsX + fragW, baselineY + 2, decoColor);
-          break;
-        case css::TextDecorationLine::Overline:
-          // 1px line at top of fragment
-          canvas.drawLine(fragAbsX, fragAbsY,
-                          fragAbsX + fragW, fragAbsY, decoColor);
-          break;
-        case css::TextDecorationLine::LineThrough:
-          // 1px line at middle of fragment
-          canvas.drawLine(fragAbsX, fragAbsY + fragH / 2,
-                          fragAbsX + fragW, fragAbsY + fragH / 2, decoColor);
-          break;
-        default:
-          break;
+          switch (frag.textDecorationLine) {
+            case css::TextDecorationLine::Underline:
+              // 1px line below baseline
+              canvas.drawLine(fragAbsX, baselineY + 2,
+                              fragAbsX + fragW, baselineY + 2, decoColor);
+              break;
+            case css::TextDecorationLine::Overline:
+              // 1px line at top of fragment
+              canvas.drawLine(fragAbsX, fragAbsY,
+                              fragAbsX + fragW, fragAbsY, decoColor);
+              break;
+            case css::TextDecorationLine::LineThrough:
+              // 1px line at middle of fragment
+              canvas.drawLine(fragAbsX, fragAbsY + fragH / 2,
+                              fragAbsX + fragW, fragAbsY + fragH / 2, decoColor);
+              break;
+            default:
+              break;
+          }
+        }
       }
     }
   }

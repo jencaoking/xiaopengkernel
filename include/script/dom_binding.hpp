@@ -9,6 +9,7 @@
 #include <quickjs.h>
 #include <script/event_binding.hpp>
 #include <script/js_binding.hpp>
+#include <dom/event_system.hpp>
 
 namespace xiaopeng {
 namespace script {
@@ -37,6 +38,7 @@ public:
     JS_NewClassID(&s_nodeListClassId);
     JS_NewClassID(&s_classListClassId);
     JS_NewClassID(&s_textNodeClassId);
+    JS_NewClassID(&s_eventClassId);
 
     // Element class
     JSClassDef elementDef;
@@ -72,6 +74,18 @@ public:
     textDef.class_name = "Text";
     textDef.finalizer = [](JSRuntime *, JSValue) {};
     JS_NewClass(JS_GetRuntime(ctx), s_textNodeClassId, &textDef);
+
+    // Event class
+    JSClassDef eventDef;
+    memset(&eventDef, 0, sizeof(JSClassDef));
+    eventDef.class_name = "Event";
+    eventDef.finalizer = [](JSRuntime *, JSValue val) {
+      auto* evPtr = (std::shared_ptr<dom::Event>*)JS_GetOpaque(val, s_eventClassId);
+      if (evPtr) {
+        delete evPtr;
+      }
+    };
+    JS_NewClass(JS_GetRuntime(ctx), s_eventClassId, &eventDef);
   }
 
   // ── wrapDocument ────────────────────────────────────────────
@@ -284,6 +298,30 @@ public:
 
     return obj;
   }
+  // ── wrapEvent ────────────────────────────────────────────────
+  static JSValue wrapEvent(JSContext *ctx, std::shared_ptr<dom::Event> ev) {
+    if (!ev) return JS_NULL;
+    JSValue obj = JS_NewObjectClass(ctx, s_eventClassId);
+    if (JS_IsException(obj)) return obj;
+
+    // We store a copy of the shared_ptr in Opaque so it stays alive
+    auto* evPtr = new std::shared_ptr<dom::Event>(ev);
+    JS_SetOpaque(obj, evPtr);
+
+    bindReadOnly(ctx, obj, "type", event_get_type);
+    bindReadOnly(ctx, obj, "bubbles", event_get_bubbles);
+    bindReadOnly(ctx, obj, "cancelable", event_get_cancelable);
+    bindReadOnly(ctx, obj, "eventPhase", event_get_eventPhase);
+    bindReadOnly(ctx, obj, "target", event_get_target);
+    bindReadOnly(ctx, obj, "currentTarget", event_get_currentTarget);
+
+    JS_SetPropertyStr(ctx, obj, "stopPropagation",
+                      JS_NewCFunction(ctx, event_stopPropagation, "stopPropagation", 0));
+    JS_SetPropertyStr(ctx, obj, "preventDefault",
+                      JS_NewCFunction(ctx, event_preventDefault, "preventDefault", 0));
+
+    return obj;
+  }
 
   static void cleanup() {
     std::lock_guard<std::mutex> lock(s_mutex);
@@ -297,6 +335,7 @@ private:
   static JSClassID s_nodeListClassId;
   static JSClassID s_classListClassId;
   static JSClassID s_textNodeClassId;
+  static JSClassID s_eventClassId;
 
   static inline std::vector<std::weak_ptr<dom::Element>> s_createdElements;
   static inline std::vector<dom::NodePtr> s_createdNodes; // BUG FIX: track all created nodes
@@ -384,6 +423,73 @@ public:
   // ══════════════════════════════════════════════════════════
   //  DOCUMENT METHODS
   // ══════════════════════════════════════════════════════════
+
+  // ── Helper: get Event* from event class ──
+  static std::shared_ptr<dom::Event> getEventFromThis(JSContext *ctx, JSValueConst this_val) {
+    (void)ctx;
+    auto* evPtr = (std::shared_ptr<dom::Event>*)JS_GetOpaque(this_val, s_eventClassId);
+    if (evPtr) return *evPtr;
+    return nullptr;
+  }
+
+  // ── Event Getters/Methods ──
+  static JSValue event_get_type(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    return JSBinding::toJSString(ctx, ev->type());
+  }
+
+  static JSValue event_get_bubbles(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    return JS_NewBool(ctx, ev->bubbles());
+  }
+
+  static JSValue event_get_cancelable(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    return JS_NewBool(ctx, ev->cancelable());
+  }
+
+  static JSValue event_get_eventPhase(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    return JS_NewInt32(ctx, static_cast<int32_t>(ev->phase()));
+  }
+
+  static JSValue event_get_target(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    return wrapNode(ctx, ev->target());
+  }
+
+  static JSValue event_get_currentTarget(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    return wrapNode(ctx, ev->currentTarget());
+  }
+
+  static JSValue event_stopPropagation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    ev->stopPropagation();
+    return JS_UNDEFINED;
+  }
+
+  static JSValue event_preventDefault(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)argc; (void)argv;
+    auto ev = getEventFromThis(ctx, this_val);
+    if (!ev) return JS_EXCEPTION;
+    ev->preventDefault();
+    return JS_UNDEFINED;
+  }
 
   static dom::Document *getDoc(JSContext *ctx, JSValueConst this_val) {
     (void)ctx;
@@ -1380,12 +1486,12 @@ public:
     if (!node || argc < 1) return JS_EXCEPTION;
 
     std::string type = JSBinding::toStdString(ctx, argv[0]);
-    auto it = node->eventListenerIds_.find(type);
-    if (it != node->eventListenerIds_.end()) {
-      JSValue eventObj = EventBinding::createEventObject(ctx, type);
-      EventBinding::dispatch(ctx, it->second, eventObj);
-      JS_FreeValue(ctx, eventObj);
-    }
+    // Create a real dom::Event with bubbling=true, cancelable=true
+    auto ev = std::make_shared<dom::Event>(type, true, true);
+    
+    // Dispatch it through the real W3C EventSystem
+    dom::EventSystem::dispatchEvent(node->shared_from_this(), ev);
+    
     return JS_UNDEFINED;
   }
 };
@@ -1397,6 +1503,7 @@ inline JSClassID DOMBinding::s_documentClassId = 0;
 inline JSClassID DOMBinding::s_nodeListClassId = 0;
 inline JSClassID DOMBinding::s_classListClassId = 0;
 inline JSClassID DOMBinding::s_textNodeClassId = 0;
+inline JSClassID DOMBinding::s_eventClassId = 0;
 
 } // namespace script
 } // namespace xiaopeng

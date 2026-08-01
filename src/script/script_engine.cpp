@@ -49,22 +49,13 @@ bool ScriptEngine::initialize() {
     if (!this->m_ctx || !node) return;
     const auto *listenerIds = node->getEventListeners(event->type());
     if (listenerIds && !listenerIds->empty()) {
-      JSValue eventObj = EventBinding::createEventObject(this->m_ctx, event->type());
+      // Create a full JS Event wrapper that connects back to the C++ event
+      JSValue eventObj = DOMBinding::wrapEvent(this->m_ctx, event);
       
-      if (event->target()) {
-        JSValue targetVal = DOMBinding::wrapNode(this->m_ctx, event->target());
-        JS_SetPropertyStr(this->m_ctx, eventObj, "target", targetVal);
-      }
-      if (event->currentTarget()) {
-        JSValue currentTargetVal = DOMBinding::wrapNode(this->m_ctx, event->currentTarget());
-        JS_SetPropertyStr(this->m_ctx, eventObj, "currentTarget", currentTargetVal);
-      }
-      
-      JS_SetPropertyStr(this->m_ctx, eventObj, "bubbles", JS_NewBool(this->m_ctx, event->bubbles()));
-      JS_SetPropertyStr(this->m_ctx, eventObj, "cancelable", JS_NewBool(this->m_ctx, event->cancelable()));
-      JS_SetPropertyStr(this->m_ctx, eventObj, "eventPhase", JS_NewInt32(this->m_ctx, static_cast<int32_t>(phase)));
-      
+      // Dispatch the event to all listeners
       EventBinding::dispatch(this->m_ctx, *listenerIds, eventObj);
+      
+      // Free our reference
       JS_FreeValue(this->m_ctx, eventObj);
     }
   });

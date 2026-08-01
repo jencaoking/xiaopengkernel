@@ -59,14 +59,14 @@ private:
   // Lay out a single text node, breaking it into word/space fragments and
   // respecting the node's `white-space` value.
   void layoutText(LayoutBoxPtr parent, LayoutBoxPtr nodeBox,
-                  LineBox &currentLine, float &currentX, float maxWidth,
-                  float startX, bool &lineHasContent);
+                  LineBox &currentLine, float &currentX, float &contentWidth,
+                  float &maxWidth, float &startX, bool &lineHasContent);
 
   // Lay out an atomic inline-level box (inline-block / replaced element).
   void layoutInlineBlock(LayoutAlgorithm &algo, LayoutBoxPtr parent,
                          LayoutBoxPtr item, LineBox &currentLine,
-                         float &currentX, float contentWidth,
-                         float leftFloatWidth);
+                         float &currentX, float &contentWidth,
+                         float &maxWidth, float &startX, bool &lineHasContent);
 
   // Apply text-align to all line boxes of `box`.
   void applyTextAlignment(LayoutBoxPtr box, float contentWidth,
@@ -82,13 +82,14 @@ private:
   float effectiveLineHeight(const css::ComputedStyle &style,
                             int fontSize) const;
 
-  // Compute the float-induced horizontal insets for the IFC's content area.
-  void computeFloatInsets(float &leftFloatWidth,
+  // Compute the float-induced horizontal insets for the IFC's content area at a specific Y coordinate.
+  void computeFloatInsets(float y, float &leftFloatWidth,
                           float &rightFloatWidth) const;
 
   // Force-wrap the current line and start a fresh one.
   void breakLine(LayoutBoxPtr box, LineBox &currentLine, float &currentX,
-                 float startX) const;
+                 float &contentWidth, float &maxWidth, float &startX,
+                 bool &lineHasContent) const;
 
   std::vector<LayoutBoxPtr> activeFloats_;
   std::vector<FloatInfo> leftFloats_;

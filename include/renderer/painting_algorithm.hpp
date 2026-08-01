@@ -12,6 +12,12 @@
 namespace xiaopeng {
 namespace renderer {
 
+enum class PaintPhase {
+  BackgroundAndBorders,
+  Foreground,
+  Both
+};
+
 class PaintingAlgorithm {
 public:
   void paint(layout::LayoutBoxPtr root, Canvas &canvas);
@@ -24,8 +30,8 @@ private:
   void collectLayers(layout::LayoutBoxPtr box, PaintLayerPtr currentLayer);
   
   void paintLayer(PaintLayerPtr layer, Canvas &canvas, int parentX, int parentY);
-  void paintNormalFlow(layout::LayoutBoxPtr box, Canvas &canvas, int parentX, int parentY);
-  void paintBox(layout::LayoutBoxPtr box, Canvas &canvas, int parentBorderBoxX, int parentBorderBoxY);
+  void paintNormalFlow(layout::LayoutBoxPtr box, Canvas &canvas, int parentX, int parentY, PaintPhase phase);
+  void paintBox(layout::LayoutBoxPtr box, Canvas &canvas, int parentBorderBoxX, int parentBorderBoxY, PaintPhase phase);
   void getParentBorderBox(layout::LayoutBoxPtr box, int& px, int& py);
 
   // Heuristic to determine color based on element type/class for visualization

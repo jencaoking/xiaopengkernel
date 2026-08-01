@@ -511,9 +511,64 @@ private:
   }
 
   void layoutInline(LayoutBoxPtr box) {
-    // Pass the BFC's float lists to the IFC so it can size lines
+    // 1. Process and position float children within this IFC
+    std::vector<FloatInfo> leftFloats = box->leftFloats();
+    std::vector<FloatInfo> rightFloats = box->rightFloats();
+
+    float currentY = 0; // Relative to content top
+    for (auto child : box->children()) {
+      if (child->style().position == css::Position::Absolute ||
+          child->style().position == css::Position::Fixed) {
+        continue;
+      }
+      if (child->style().cssFloat != css::Float::None) {
+        layoutBox(child, box->dimensions());
+        float childOuterWidth = child->dimensions().margin.left + child->dimensions().border.left +
+                                child->dimensions().padding.left + child->dimensions().content.width +
+                                child->dimensions().padding.right + child->dimensions().border.right +
+                                child->dimensions().margin.right;
+        float childOuterHeight = child->dimensions().margin.top + child->dimensions().border.top +
+                                 child->dimensions().padding.top + child->dimensions().content.height +
+                                 child->dimensions().padding.bottom + child->dimensions().border.bottom +
+                                 child->dimensions().margin.bottom;
+                                 
+        float parentContentX = box->dimensions().padding.left + box->dimensions().border.left;
+        float parentContentY = box->dimensions().padding.top + box->dimensions().border.top;
+
+        if (child->style().cssFloat == css::Float::Left) {
+          float floatY = findFloatPosition(leftFloats, box->dimensions().content.width, childOuterWidth, childOuterHeight, currentY, true);
+          child->dimensions().content.x = parentContentX + child->dimensions().margin.left;
+          child->dimensions().content.y = parentContentY + floatY + child->dimensions().margin.top;
+          child->setFloat(true);
+          FloatInfo fi;
+          fi.box = child;
+          fi.x = child->dimensions().content.x - child->dimensions().margin.left;
+          fi.y = child->dimensions().content.y - child->dimensions().margin.top;
+          fi.width = childOuterWidth;
+          fi.height = childOuterHeight;
+          fi.isLeft = true;
+          leftFloats.push_back(fi);
+        } else if (child->style().cssFloat == css::Float::Right) {
+          float floatY = findFloatPosition(rightFloats, box->dimensions().content.width, childOuterWidth, childOuterHeight, currentY, false);
+          child->dimensions().content.x = parentContentX + box->dimensions().content.width - childOuterWidth + child->dimensions().margin.left;
+          child->dimensions().content.y = parentContentY + floatY + child->dimensions().margin.top;
+          child->setFloat(true);
+          FloatInfo fi;
+          fi.box = child;
+          fi.x = child->dimensions().content.x - child->dimensions().margin.left;
+          fi.y = child->dimensions().content.y - child->dimensions().margin.top;
+          fi.width = childOuterWidth;
+          fi.height = childOuterHeight;
+          fi.isLeft = false;
+          rightFloats.push_back(fi);
+        }
+      }
+    }
+    box->setActiveFloats(leftFloats, rightFloats);
+
+    // Pass the combined BFC's float lists to the IFC so it can size lines
     // around intruding floats.
-    InlineFormattingContext ifc(box->leftFloats(), box->rightFloats());
+    InlineFormattingContext ifc(leftFloats, rightFloats);
     ifc.layout(*this, box);
   }
 
@@ -706,18 +761,24 @@ inline void InlineFormattingContext::layout(LayoutAlgorithm &algo,
   float strutDescent = 0;
   computeStrut(box, strutAscent, strutDescent);
 
+  // Initial line setup
+  LineBox currentLine;
+  currentLine.setY(box->dimensions().padding.top +
+                   box->dimensions().border.top);
+  currentLine.setStrut(strutAscent, strutDescent);
+
   // Floats reduce the available content width and shift the line start.
   float leftFloatWidth = 0;
   float rightFloatWidth = 0;
-  computeFloatInsets(leftFloatWidth, rightFloatWidth);
+  computeFloatInsets(currentLine.y(), leftFloatWidth, rightFloatWidth);
 
   const float originalWidth = box->dimensions().content.width;
   float contentWidth = originalWidth - leftFloatWidth - rightFloatWidth;
   if (contentWidth < 0)
     contentWidth = 0;
 
-  const float startX = leftFloatWidth;
-  const float maxWidth = leftFloatWidth + contentWidth;
+  float startX = leftFloatWidth;
+  float maxWidth = leftFloatWidth + contentWidth;
 
   // text-indent applies only to the first formatted line of each block
   // container (CSS §9.1). We model it by widening the start position of
@@ -729,11 +790,6 @@ inline void InlineFormattingContext::layout(LayoutAlgorithm &algo,
     firstLineIndent = contentWidth * (box->style().textIndent.value / 100.0f);
   }
 
-  LineBox currentLine;
-  currentLine.setY(box->dimensions().padding.top +
-                   box->dimensions().border.top);
-  currentLine.setStrut(strutAscent, strutDescent);
-
   float currentX = startX + firstLineIndent;
   bool lineHasContent = false;
 
@@ -743,11 +799,10 @@ inline void InlineFormattingContext::layout(LayoutAlgorithm &algo,
   for (auto &item : inlineItems) {
     if (item->type() == BoxType::InlineBlockNode) {
       layoutInlineBlock(algo, box, item, currentLine, currentX, contentWidth,
-                        leftFloatWidth);
-      lineHasContent = true;
+                        maxWidth, startX, lineHasContent);
     } else if (item->node() &&
                item->node()->nodeType() == dom::NodeType::Text) {
-      layoutText(box, item, currentLine, currentX, maxWidth, startX,
+      layoutText(box, item, currentLine, currentX, contentWidth, maxWidth, startX,
                  lineHasContent);
     }
     // Other inline-level box types (e.g. raw InlineNode wrappers around
@@ -800,7 +855,7 @@ inline void InlineFormattingContext::collectInlineItems(
 
 inline void InlineFormattingContext::layoutText(
     LayoutBoxPtr parent, LayoutBoxPtr nodeBox, LineBox &currentLine,
-    float &currentX, float maxWidth, float startX, bool &lineHasContent) {
+    float &currentX, float &contentWidth, float &maxWidth, float &startX, bool &lineHasContent) {
   if (!nodeBox || !nodeBox->node())
     return;
 
@@ -883,8 +938,7 @@ inline void InlineFormattingContext::layoutText(
     // overflow rather than be split — word breaking is not implemented).
     if (allowWrap && lineHasContent &&
         currentX + wordWidth > maxWidth + 0.001f) {
-      breakLine(parent, currentLine, currentX, startX);
-      lineHasContent = false;
+      breakLine(parent, currentLine, currentX, contentWidth, maxWidth, startX, lineHasContent);
     }
 
     BoxFragment frag;
@@ -915,8 +969,7 @@ inline void InlineFormattingContext::layoutText(
   };
 
   auto forceBreak = [&]() {
-    breakLine(parent, currentLine, currentX, startX);
-    lineHasContent = false;
+    breakLine(parent, currentLine, currentX, contentWidth, maxWidth, startX, lineHasContent);
   };
 
   size_t pos = 0;
@@ -991,8 +1044,8 @@ inline void InlineFormattingContext::layoutText(
 
 inline void InlineFormattingContext::layoutInlineBlock(
     LayoutAlgorithm &algo, LayoutBoxPtr parent, LayoutBoxPtr item,
-    LineBox &currentLine, float &currentX, float contentWidth,
-    float leftFloatWidth) {
+    LineBox &currentLine, float &currentX, float &contentWidth,
+    float &maxWidth, float &startX, bool &lineHasContent) {
   if (!item)
     return;
 
@@ -1015,16 +1068,9 @@ inline void InlineFormattingContext::layoutInlineBlock(
                            d.content.height + d.padding.bottom +
                            d.border.bottom + d.margin.bottom;
 
-  const float maxWidth = leftFloatWidth + contentWidth;
-
   // Wrap to a new line if the inline-block doesn't fit.
-  if (currentX + itemWidth > maxWidth + 0.001f && currentX > leftFloatWidth) {
-    currentLine.finalizeAlignment();
-    parent->addLineBox(currentLine);
-    const float nextY = currentLine.y() + currentLine.height();
-    currentLine = LineBox();
-    currentLine.setY(nextY);
-    currentX = leftFloatWidth;
+  if (lineHasContent && currentX + itemWidth > maxWidth + 0.001f && currentX > startX) {
+    breakLine(parent, currentLine, currentX, contentWidth, maxWidth, startX, lineHasContent);
   }
 
   // Per CSS 2.1 §10.8.1, the baseline of an `inline-block` whose
@@ -1036,7 +1082,7 @@ inline void InlineFormattingContext::layoutInlineBlock(
 
   BoxFragment frag;
   frag.box = item;
-  frag.x = currentX + d.margin.left - leftFloatWidth;
+  frag.x = currentX + d.margin.left - startX;
   frag.y = 0;
   frag.width = fragWidth;
   frag.height = fragHeight;
@@ -1049,6 +1095,7 @@ inline void InlineFormattingContext::layoutInlineBlock(
 
   currentLine.addFragment(frag);
   currentX += itemWidth;
+  lineHasContent = true;
 }
 
 inline void InlineFormattingContext::applyTextAlignment(
@@ -1147,17 +1194,21 @@ inline float InlineFormattingContext::effectiveLineHeight(
 }
 
 inline void InlineFormattingContext::computeFloatInsets(
-    float &leftFloatWidth, float &rightFloatWidth) const {
+    float y, float &leftFloatWidth, float &rightFloatWidth) const {
   leftFloatWidth = 0;
   rightFloatWidth = 0;
 
   // Prefer the new FloatInfo lists if available
   if (!leftFloats_.empty() || !rightFloats_.empty()) {
     for (const auto &fi : leftFloats_) {
-      leftFloatWidth = std::max(leftFloatWidth, fi.width);
+      if (y >= fi.y && y < fi.y + fi.height) {
+        leftFloatWidth = std::max(leftFloatWidth, fi.width);
+      }
     }
     for (const auto &fi : rightFloats_) {
-      rightFloatWidth = std::max(rightFloatWidth, fi.width);
+      if (y >= fi.y && y < fi.y + fi.height) {
+        rightFloatWidth = std::max(rightFloatWidth, fi.width);
+      }
     }
     return;
   }
@@ -1170,10 +1221,16 @@ inline void InlineFormattingContext::computeFloatInsets(
     const float outerWidth = d.margin.left + d.border.left + d.padding.left +
                              d.content.width + d.padding.right +
                              d.border.right + d.margin.right;
-    if (floatBox->style().cssFloat == css::Float::Left) {
-      leftFloatWidth = std::max(leftFloatWidth, outerWidth);
-    } else if (floatBox->style().cssFloat == css::Float::Right) {
-      rightFloatWidth = std::max(rightFloatWidth, outerWidth);
+    const float floatY = d.content.y - d.padding.top - d.border.top - d.margin.top;
+    const float floatHeight = d.margin.top + d.border.top + d.padding.top +
+                              d.content.height + d.padding.bottom +
+                              d.border.bottom + d.margin.bottom;
+    if (y >= floatY && y < floatY + floatHeight) {
+      if (floatBox->style().cssFloat == css::Float::Left) {
+        leftFloatWidth = std::max(leftFloatWidth, outerWidth);
+      } else if (floatBox->style().cssFloat == css::Float::Right) {
+        rightFloatWidth = std::max(rightFloatWidth, outerWidth);
+      }
     }
   }
 }
@@ -1181,16 +1238,40 @@ inline void InlineFormattingContext::computeFloatInsets(
 inline void InlineFormattingContext::breakLine(LayoutBoxPtr box,
                                                LineBox &currentLine,
                                                float &currentX,
-                                               float startX) const {
+                                               float &contentWidth,
+                                               float &maxWidth,
+                                               float &startX,
+                                               bool &lineHasContent) const {
+  if (currentLine.fragments().empty())
+    return;
+
   currentLine.finalizeAlignment();
   box->addLineBox(currentLine);
-  const float nextY = currentLine.y() + currentLine.height();
-  float strutA = currentLine.ascent();
-  float strutD = currentLine.descent();
-  currentLine = LineBox();
+
+  float nextY = currentLine.y() + currentLine.height();
+  
+  float strutAscent = 0;
+  float strutDescent = 0;
+  computeStrut(box, strutAscent, strutDescent);
+
+  currentLine.clear();
   currentLine.setY(nextY);
-  currentLine.setStrut(strutA, strutD);
+  currentLine.setStrut(strutAscent, strutDescent);
+
+  float leftFloatWidth = 0;
+  float rightFloatWidth = 0;
+  computeFloatInsets(nextY, leftFloatWidth, rightFloatWidth);
+
+  const float originalWidth = box->dimensions().content.width;
+  contentWidth = originalWidth - leftFloatWidth - rightFloatWidth;
+  if (contentWidth < 0)
+    contentWidth = 0;
+
+  startX = leftFloatWidth;
+  maxWidth = leftFloatWidth + contentWidth;
+
   currentX = startX;
+  lineHasContent = false;
 }
 
 } // namespace layout
