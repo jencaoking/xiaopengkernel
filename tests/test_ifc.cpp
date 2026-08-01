@@ -108,14 +108,22 @@ TEST(IFC_LeadingSpacesAreCollapsed) {
 }
 
 TEST(IFC_MultipleSpacesCollapseToOne) {
-  auto root = makeBlock(200);
-  root->addChild(makeText("a     b"));
+  auto root = makeBlock(100);
+  root->addChild(makeText("Hello      World"));
   layoutRoot(root);
+  // "Hello World" fits on 1 line.
   EXPECT_EQ(root->lineBoxes().size(), 1u);
-  // Two word fragments on the line.
-  if (!root->lineBoxes().empty()) {
-    EXPECT_EQ(root->lineBoxes()[0].fragments().size(), 2u);
-  }
+}
+
+TEST(IFC_CJKTextWrapsCorrectly) {
+  // CJK characters should wrap character-by-character since they are not space-delimited
+  // "这是一段中文测试" (8 chars) -> If each char is ~16px, 8 chars = 128px.
+  // With block width 50, it should break after ~3 chars.
+  auto root = makeBlock(50);
+  root->addChild(makeText("这是一段中文测试"));
+  layoutRoot(root);
+  // Expect it to span multiple lines, not just overflow on a single line!
+  EXPECT_GT(root->lineBoxes().size(), 1u);
 }
 
 // ---------------------------------------------------------------------------

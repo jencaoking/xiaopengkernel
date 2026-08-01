@@ -79,17 +79,41 @@ public:
 
     // Track the geometric extents required by top/bottom aligned fragments
     // so we can size the line box to contain them after finalization.
-    float fragTop = 0;    // relative to line top (tentative)
-    float fragBottom = fragment.height;
     if (fragment.verticalAlign == css::VerticalAlign::Top) {
       topAlignMaxHeight_ = std::max(topAlignMaxHeight_, fragment.height);
     } else if (fragment.verticalAlign == css::VerticalAlign::Bottom) {
       bottomAlignMaxHeight_ = std::max(bottomAlignMaxHeight_, fragment.height);
-    } else {
-      // Baseline/middle/text-* variants: tentatively place by baseline so
-      // we can compute the line's tentative height from ascent+descent.
-      (void)fragTop;
-      (void)fragBottom;
+    } else if (fragment.verticalAlign != css::VerticalAlign::Baseline) {
+      // For Middle, TextTop, TextBottom, Sub, Super, compute required ascent/descent
+      float reqAscent = 0;
+      float reqDescent = 0;
+      
+      switch (fragment.verticalAlign) {
+        case css::VerticalAlign::Middle:
+          reqAscent = fragment.height / 2.0f - strutAscent_ * 0.25f;
+          reqDescent = fragment.height / 2.0f + strutAscent_ * 0.25f;
+          break;
+        case css::VerticalAlign::TextTop:
+          reqAscent = strutAscent_;
+          reqDescent = fragment.height - strutAscent_;
+          break;
+        case css::VerticalAlign::TextBottom:
+          reqAscent = fragment.height - strutDescent_;
+          reqDescent = strutDescent_;
+          break;
+        case css::VerticalAlign::Sub:
+          reqAscent = fragment.ascent - strutAscent_ * 0.33f;
+          reqDescent = fragment.descent + strutAscent_ * 0.33f;
+          break;
+        case css::VerticalAlign::Super:
+          reqAscent = fragment.ascent + strutAscent_ * 0.33f;
+          reqDescent = fragment.descent - strutAscent_ * 0.33f;
+          break;
+        default:
+          break;
+      }
+      if (reqAscent > maxAscent_) maxAscent_ = reqAscent;
+      if (reqDescent > maxDescent_) maxDescent_ = reqDescent;
     }
 
     // Tentative height (refined by finalizeAlignment).
