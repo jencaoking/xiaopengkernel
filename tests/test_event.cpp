@@ -66,8 +66,7 @@ TEST(Event_BubblePhase) {
   EventSystem::dispatchEvent(div, event);
 
   // After bubbling, phase should be Bubbling or ended
-  EXPECT_TRUE(event->phase() == EventPhase::Bubbling ||
-              event->phase() == EventPhase::AtTarget);
+  EXPECT_EQ(event->phase(), EventPhase::None);
 }
 
 TEST(ScriptEngine_BasicInit) {

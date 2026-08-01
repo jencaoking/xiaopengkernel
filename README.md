@@ -52,52 +52,6 @@ XiaopengKernel 是一个从零开始构建的、自研的轻量级浏览器 / HT
 
 XiaopengKernel 采用清晰的分层管线设计：输入 HTML 经过解析层构建 DOM / CSSOM，经布局引擎生成布局树，再由渲染引擎绘制到画布，脚本引擎驱动交互，加载层在后台异步获取资源，平台层对接 SDL2 / OpenGL / FreeType。
 
-```mermaid
-flowchart TB
-    subgraph Parse["解析层 (Parser)"]
-        HTML[HTML 词法/树构建]
-        CSS[CSS 解析 / 选择器]
-    end
-    subgraph Core["核心引擎 (Engine)"]
-        DOM[DOM 树]
-        LAYOUT["布局引擎 Block/Inline/Flex/Grid"]
-        STACK[层叠上下文]
-        RENDER["渲染引擎 Software + OpenGL"]
-    end
-    subgraph Script["脚本层 (Scripting)"]
-        JS[QuickJS 运行时]
-        BIND["DOM / 事件 / 定时器 绑定"]
-    end
-    subgraph Loader["加载层 (Loader)"]
-        LOADER[Loader 统一接口]
-        HTTP["HttpClient HTTP/2/3"]
-        POOL[连接池]
-        CACHE[LRU 缓存]
-        SCHED[调度器]
-        SEC["同源 / CORS 安全"]
-    end
-    subgraph Platform["平台层 (Platform)"]
-        SDL[SDL2 窗口]
-        GL[OpenGL]
-        FT[FreeType / HarfBuzz]
-    end
-
-    HTML --> DOM
-    CSS --> DOM
-    DOM --> LAYOUT
-    LAYOUT --> STACK
-    STACK --> RENDER
-    RENDER --> SDL
-    BIND --> DOM
-    JS --> BIND
-    LOADER --> HTTP
-    HTTP --> POOL
-    POOL --> CACHE
-    CACHE --> SCHED
-    SCHED --> SEC
-    DOM -.-> LOADER
-```
-
 <!-- 文本环境 / 旧版渲染回退图 -->
 ```
 ┌─────────────────────────────────────────────────────────┐
