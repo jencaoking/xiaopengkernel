@@ -40,6 +40,13 @@ Testing/
 *.so
 *.dylib
 
+# Allow precompiled binaries in third_party
+!third_party/**/*.a
+!third_party/**/*.dll
+!third_party/**/*.dll.a
+!third_party/**/*.so
+!third_party/**/*.dylib
+
 # OS files
 .DS_Store
 Thumbs.db
