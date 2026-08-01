@@ -22,7 +22,16 @@ jobs:
       with:
         submodules: recursive
 
-    # --- 0. 缓存 CMake 构建目录（增量构建加速） ---
+    # --- 0. 缓存 CMake FetchContent 依赖目录 ---
+    - name: Cache CMake FetchContent
+      uses: actions/cache@v4
+      with:
+        path: .cmake-deps
+        key: ${{ runner.os }}-cmake-deps-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-cmake-deps-
+
+    # --- 0.1 缓存 CMake 构建目录（增量构建加速） ---
     - name: Cache CMake build directory
       uses: actions/cache@v4
       with:
@@ -48,16 +57,17 @@ jobs:
         msystem: MINGW64
         install: mingw-w64-x86_64-gcc mingw-w64-x86_64-make
         path-type: inherit
+        cache: true
 
     # --- 配置 CMake ---
     - name: Configure CMake (Linux)
       if: runner.os == 'Linux'
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.cmake-deps
 
     - name: Configure CMake (Windows MinGW)
       if: runner.os == 'Windows'
       # 在 Windows 下使用 MinGW Makefiles 并通过选项启用 third_party 依赖
-      run: cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DUSE_THIRD_PARTY=ON
+      run: cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DUSE_THIRD_PARTY=ON -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.cmake-deps
 
     # --- 执行构建 ---
     - name: Build
