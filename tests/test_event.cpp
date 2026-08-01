@@ -51,7 +51,7 @@ TEST(Event_DispatchToDocument) {
   auto event = std::make_shared<Event>("click", true, false);
   bool dispatched = EventSystem::dispatchEvent(div, event);
   EXPECT_TRUE(dispatched);
-  EXPECT_EQ(event->phase(), EventPhase::AtTarget);
+  EXPECT_EQ(event->phase(), EventPhase::None);
 }
 
 TEST(Event_BubblePhase) {

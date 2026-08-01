@@ -25,52 +25,64 @@ TEST(StackingContext_RootAlwaysCreates) {
 }
 
 TEST(StackingContext_PositionedWithZIndex) {
+  auto parent = makeBoxWithStyle(ComputedStyle());
   ComputedStyle style;
   style.display = Display::Block;
   style.position = Position::Relative;
   style.zIndex = 1;
   auto box = makeBoxWithStyle(style);
+  parent->addChild(box);
   EXPECT_TRUE(box->createsStackingContext());
 }
 
 TEST(StackingContext_OpacityLessThanOne) {
+  auto parent = makeBoxWithStyle(ComputedStyle());
   ComputedStyle style;
   style.display = Display::Block;
   style.opacity = 0.5f;
   auto box = makeBoxWithStyle(style);
+  parent->addChild(box);
   EXPECT_TRUE(box->createsStackingContext());
 }
 
 TEST(StackingContext_TransformNone) {
+  auto parent = makeBoxWithStyle(ComputedStyle());
   ComputedStyle style;
   style.display = Display::Block;
   style.transform = "none";
   auto box = makeBoxWithStyle(style);
+  parent->addChild(box);
   // "none" should NOT create stacking context
   EXPECT_FALSE(box->createsStackingContext());
 }
 
 TEST(StackingContext_TransformPresent) {
+  auto parent = makeBoxWithStyle(ComputedStyle());
   ComputedStyle style;
   style.display = Display::Block;
   style.transform = "rotate(45deg)";
   auto box = makeBoxWithStyle(style);
+  parent->addChild(box);
   EXPECT_TRUE(box->createsStackingContext());
 }
 
 TEST(StackingContext_FixedPosition) {
+  auto parent = makeBoxWithStyle(ComputedStyle());
   ComputedStyle style;
   style.display = Display::Block;
   style.position = Position::Fixed;
   auto box = makeBoxWithStyle(style);
+  parent->addChild(box);
   EXPECT_TRUE(box->createsStackingContext());
 }
 
 TEST(StackingContext_IsolationIsolate) {
+  auto parent = makeBoxWithStyle(ComputedStyle());
   ComputedStyle style;
   style.display = Display::Block;
   style.isolation = Isolation::Isolate;
   auto box = makeBoxWithStyle(style);
+  parent->addChild(box);
   EXPECT_TRUE(box->createsStackingContext());
 }
 

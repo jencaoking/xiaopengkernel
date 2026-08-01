@@ -105,6 +105,7 @@ public:
       }
     }
 
+    event->setPhase(EventPhase::None);
     return !event->isDefaultPrevented();
   }
 
