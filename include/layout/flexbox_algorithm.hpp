@@ -56,8 +56,10 @@ public:
         calculateFlexLines(items, container, isRow);
 
     // 6. Layout each flex line
+    float currentCrossPos = 0.0f;
     for (auto &line : lines) {
-      layoutFlexLine(line, container, isRow, isReverse);
+      float lineCrossSize = layoutFlexLine(line, container, isRow, isReverse, currentCrossPos);
+      currentCrossPos += lineCrossSize;
     }
 
     // 7. Calculate container height if auto
@@ -252,8 +254,8 @@ private:
     return lines;
   }
 
-  void layoutFlexLine(std::vector<FlexItem> &line, LayoutBoxPtr container,
-                      bool isRow, bool isReverse) {
+  float layoutFlexLine(std::vector<FlexItem> &line, LayoutBoxPtr container,
+                       bool isRow, bool isReverse, float crossOffset) {
 
     float containerMainSize = isRow ? container->dimensions().content.width
                                     : container->dimensions().content.height;
@@ -423,11 +425,13 @@ private:
 
       // Apply cross axis position
       if (isRow) {
-        item.box->dimensions().content.y = crossStart;
+        item.box->dimensions().content.y = crossStart + crossOffset;
       } else {
-        item.box->dimensions().content.x = crossStart;
+        item.box->dimensions().content.x = crossStart + crossOffset;
       }
     }
+
+    return maxCrossSize;
   }
 
   void calculateContainerHeight(LayoutBoxPtr container,

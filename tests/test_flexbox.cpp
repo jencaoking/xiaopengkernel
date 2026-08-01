@@ -96,7 +96,7 @@ TEST(Flexbox_ColumnBasic) {
   flexbox.layoutFlexContainer(container, parentDim);
 
   // Items should be stacked vertically
-  EXPECT_GT(item1->dimensions().content.y, 0.0f);
+  EXPECT_EQ(item1->dimensions().content.y, 0.0f);
   EXPECT_GT(item2->dimensions().content.y, item1->dimensions().content.y);
 }
 

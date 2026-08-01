@@ -111,6 +111,10 @@ public:
     const auto &s = style_;
     
     // Root element creates stacking context
+    if (!parent_.lock()) {
+      return true;
+    }
+    
     if (node_ && node_->nodeType() == dom::NodeType::Element) {
       auto elem = std::static_pointer_cast<dom::Element>(node_);
       if (elem->localName() == "html") {
@@ -135,7 +139,7 @@ public:
     }
 
     // transform != none
-    if (!s.transform.empty()) {
+    if (!s.transform.empty() && s.transform != "none") {
       return true;
     }
 

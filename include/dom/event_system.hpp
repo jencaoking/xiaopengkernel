@@ -96,15 +96,16 @@ public:
     // Bubble phase (only if event bubbles): from target's parent up to root
     if (event->bubbles() && !event->isPropagationStopped()) {
       event->setPhase(EventPhase::Bubbling);
-      for (size_t i = propagationPath.size() - 2; i < propagationPath.size();
-           i--) {
-        if (event->isPropagationStopped())
-          break;
-        invokeEventListeners(propagationPath[i], event, EventPhase::Bubbling);
+      if (propagationPath.size() > 1) {
+        for (size_t i = propagationPath.size() - 1; i-- > 0;) {
+          if (event->isPropagationStopped())
+            break;
+          invokeEventListeners(propagationPath[i], event, EventPhase::Bubbling);
+        }
       }
     }
 
-    return event->isDefaultPrevented();
+    return !event->isDefaultPrevented();
   }
 
 private:
