@@ -60,9 +60,9 @@ flowchart TB
     end
     subgraph Core["核心引擎 (Engine)"]
         DOM[DOM 树]
-        LAYOUT["布局引擎<br/>Block/Inline/Flex/Grid"]
+        LAYOUT["布局引擎 Block/Inline/Flex/Grid"]
         STACK[层叠上下文]
-        RENDER["渲染引擎<br/>Software + OpenGL"]
+        RENDER["渲染引擎 Software + OpenGL"]
     end
     subgraph Script["脚本层 (Scripting)"]
         JS[QuickJS 运行时]
@@ -70,7 +70,7 @@ flowchart TB
     end
     subgraph Loader["加载层 (Loader)"]
         LOADER[Loader 统一接口]
-        HTTP["HttpClient · HTTP/2·3"]
+        HTTP["HttpClient HTTP/2/3"]
         POOL[连接池]
         CACHE[LRU 缓存]
         SCHED[调度器]
