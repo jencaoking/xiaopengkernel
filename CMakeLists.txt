@@ -431,6 +431,7 @@ add_xpk_test(test_incremental tests/test_incremental.cpp)
 add_xpk_test(test_event tests/test_event.cpp)
 add_xpk_test_quickjs(test_event)
 add_xpk_test_sdl(test_event)
+add_xpk_test_freetype(test_event)
 add_xpk_test(test_event_loop tests/test_event_loop.cpp src/engine/event_loop.cpp src/engine/browsing_context.cpp)
 add_xpk_test(test_page_lifecycle tests/test_page_lifecycle.cpp
     src/engine/event_loop.cpp src/engine/browsing_context.cpp
@@ -440,6 +441,7 @@ add_xpk_test_freetype(test_ifc)
 add_xpk_test(test_dom_binding tests/test_dom_binding.cpp)
 add_xpk_test_quickjs(test_dom_binding)
 add_xpk_test_sdl(test_dom_binding)
+add_xpk_test_freetype(test_dom_binding)
 add_xpk_test(test_phase2_selectors_stacking tests/test_phase2_selectors_stacking.cpp)
 
 add_custom_target(run

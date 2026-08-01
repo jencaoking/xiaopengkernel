@@ -84,12 +84,18 @@ flowchart TB
 
     HTML --> DOM
     CSS --> DOM
-    DOM --> LAYOUT --> STACK --> RENDER
+    DOM --> LAYOUT
+    LAYOUT --> STACK
+    STACK --> RENDER
     RENDER --> SDL
     BIND --> DOM
     JS --> BIND
-    LOADER --> HTTP --> POOL --> CACHE --> SCHED --> SEC
-    DOM -. 资源链接提取 .-> LOADER
+    LOADER --> HTTP
+    HTTP --> POOL
+    POOL --> CACHE
+    CACHE --> SCHED
+    SCHED --> SEC
+    DOM -.-> LOADER
 ```
 
 <!-- 文本环境 / 旧版渲染回退图 -->
